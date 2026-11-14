@@ -1,0 +1,49 @@
+# Foldere generate de Unity
+/[Ll]ibrary/
+/[Tt]emp/
+/[Oo]bj/
+/[Bb]uild/
+/[Bb]uilds/
+/[Ll]ogs/
+/[Uu]ser[Ss]ettings/
+/[Mm]emoryCaptures/
+/[Rr]ecordings/
+
+# Cheia ARCore API se pune local, pe fiecare laptop
+/ProjectSettings/ARCoreExtensionsProjectSettings.json
+
+# IDE
+.vs/
+.vscode/
+.idea/
+.gradle/
+/[Aa]ssets/Plugins/Editor/JetBrains*
+*.csproj
+*.unityproj
+*.sln
+*.suo
+*.user
+*.userprefs
+*.pidb
+*.booproj
+*.svd
+*.pdb
+*.mdb
+*.opendb
+*.VC.db
+*.pidb.meta
+*.pdb.meta
+*.mdb.meta
+
+# Fișiere temporare
+*.tmp
+sysinfo.txt
+mono_crash.*
+crashlytics-build.properties
+ExportedObj/
+
+# Rezultatele build-ului
+*.apk
+*.aab
+*.unitypackage
+*.unitypackage.meta

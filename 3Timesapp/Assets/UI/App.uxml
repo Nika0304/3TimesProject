@@ -1,0 +1,133 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" editor-extension-mode="False">
+    <Style src="App.uss" />
+
+    <ui:VisualElement name="app" class="app" picking-mode="Ignore">
+
+        <!-- 1. Splash -->
+        <ui:VisualElement name="screen-splash" class="screen screen--dark center">
+            <ui:Label text="3Times" class="splash-title" />
+            <ui:Label text="Trecut · Prezent · Viitor" class="splash-subtitle" />
+        </ui:VisualElement>
+
+        <!-- 2. Onboarding (prima rulare) -->
+        <ui:VisualElement name="screen-onboarding" class="screen screen--paper hidden">
+            <ui:VisualElement class="grow" />
+            <ui:Label text="Bine ai venit în 3Times" class="h1" />
+            <ui:Label text="Îndreaptă telefonul spre clădirile din Piața Victoriei și mută cursorul timpului: în trecut vezi cum arătau, în prezent găsești urmele lăsate de alții, iar în viitor descoperi capsule ale timpului." class="body" />
+            <ui:VisualElement class="card">
+                <ui:Label text="De ce cerem acces" class="h3" />
+                <ui:Label text="• Camera, ca să așezăm poveștile peste imaginea reală." class="body" />
+                <ui:Label text="• Locația, ca să știm în fața cărei clădiri ești. Urmele pe care le lași conțin locul în care le-ai lăsat." class="body body--last" />
+            </ui:VisualElement>
+            <ui:VisualElement class="grow" />
+            <ui:Button name="onboarding-continue" text="Permite accesul și începe" class="btn btn--primary" />
+        </ui:VisualElement>
+
+        <!-- 3. Verificări -->
+        <ui:VisualElement name="screen-checking" class="screen screen--dark center hidden">
+            <ui:VisualElement name="checking-spinner" class="spinner" />
+            <ui:Label name="checking-status" text="Pregătim aplicația…" class="body body--light text-center" />
+        </ui:VisualElement>
+
+        <!-- 4. Localizare (peste imaginea camerei) -->
+        <ui:VisualElement name="screen-localizing" class="screen screen--clear hidden" picking-mode="Ignore">
+            <ui:VisualElement class="grow" picking-mode="Ignore" />
+            <ui:VisualElement class="sheet">
+                <ui:VisualElement class="row sheet-title">
+                    <ui:VisualElement name="localizing-spinner" class="spinner spinner--small" />
+                    <ui:Label text="Se localizează…" class="h2" />
+                </ui:VisualElement>
+                <ui:Label text="Îndreaptă telefonul spre clădirile din jur și mișcă-l încet de la stânga la dreapta." class="body" />
+                <ui:Label name="localizing-accuracy" text="Precizie: încă nu avem semnal" class="caption" />
+                <ui:VisualElement name="localizing-timeout" class="timeout hidden">
+                    <ui:Label text="Durează mai mult decât de obicei. Apropie-te de clădiri sau ieși din umbra copacilor." class="body" />
+                    <ui:VisualElement class="row">
+                        <ui:Button name="localizing-retry" text="Mai încerc" class="btn btn--secondary grow" />
+                        <ui:Button name="localizing-continue" text="Continuă oricum" class="btn btn--primary grow gap-left" />
+                    </ui:VisualElement>
+                </ui:VisualElement>
+            </ui:VisualElement>
+        </ui:VisualElement>
+
+        <!-- 5. Eroare -->
+        <ui:VisualElement name="screen-error" class="screen screen--paper hidden">
+            <ui:VisualElement class="grow" />
+            <ui:Label name="error-title" text="Titlu" class="h1" />
+            <ui:Label name="error-message" text="Mesaj" class="body" />
+            <ui:VisualElement class="grow" />
+            <ui:Button name="error-primary" text="Reîncearcă" class="btn btn--primary" />
+            <ui:Button name="error-secondary" text="Reîncearcă" class="btn btn--ghost" />
+        </ui:VisualElement>
+
+        <!-- 6. Ecranul principal, modul Prezent (macheta 1.2) -->
+        <ui:VisualElement name="screen-main" class="screen screen--clear hidden" picking-mode="Ignore">
+            <ui:VisualElement class="topbar" picking-mode="Ignore">
+                <ui:VisualElement name="status-chip" class="chip">
+                    <ui:VisualElement name="status-dot" class="dot dot--none" />
+                    <ui:Label name="status-label" text="se localizează…" class="chip-label" />
+                </ui:VisualElement>
+                <ui:Button name="menu-button" class="icon-btn">
+                    <ui:VisualElement class="bar" picking-mode="Ignore" />
+                    <ui:VisualElement class="bar" picking-mode="Ignore" />
+                    <ui:VisualElement class="bar" picking-mode="Ignore" />
+                </ui:Button>
+            </ui:VisualElement>
+
+            <!-- aici, deasupra, se văd camera și urmele în AR -->
+            <ui:VisualElement class="grow" picking-mode="Ignore" />
+
+            <ui:Label name="mode-hint" text="Atinge o urmă ca s-o deschizi" class="hint" picking-mode="Ignore" />
+
+            <ui:VisualElement class="actions">
+                <ui:Button name="action-primary" text="+ Lasă o urmă" class="btn btn--primary action-main" />
+                <ui:Button name="action-map" text="Hartă" class="btn btn--secondary action" />
+                <ui:Button name="action-postcard" text="Postcard" class="btn btn--secondary action" />
+            </ui:VisualElement>
+
+            <ui:VisualElement class="timebar">
+                <ui:VisualElement name="time-slider" class="time-slider">
+                    <ui:VisualElement name="time-track" class="time-track" picking-mode="Ignore">
+                        <ui:VisualElement class="tick tick--past" picking-mode="Ignore" />
+                        <ui:VisualElement class="tick tick--present" picking-mode="Ignore" />
+                        <ui:VisualElement class="tick tick--future" picking-mode="Ignore" />
+                        <ui:VisualElement name="time-knob" class="time-knob" picking-mode="Ignore" />
+                    </ui:VisualElement>
+                </ui:VisualElement>
+                <ui:VisualElement class="time-labels">
+                    <ui:Button name="time-past" text="Trecut" class="time-label time-label--left" />
+                    <ui:Button name="time-present" text="Prezent" class="time-label" />
+                    <ui:Button name="time-future" text="Viitor" class="time-label time-label--right" />
+                </ui:VisualElement>
+            </ui:VisualElement>
+        </ui:VisualElement>
+
+        <!-- Meniu (macheta 1.6) -->
+        <ui:VisualElement name="screen-menu" class="screen screen--paper hidden">
+            <ui:VisualElement class="header">
+                <ui:Label text="Meniu" class="h2" />
+                <ui:Button name="menu-close" text="×" class="close-btn" />
+            </ui:VisualElement>
+            <ui:Button name="menu-account" text="Cont  ›" class="list-item" />
+            <ui:Button name="menu-about" text="Despre / Surse și confidențialitate  ›" class="list-item" />
+        </ui:VisualElement>
+
+        <!-- Despre / Surse și confidențialitate (macheta 1.6.2) -->
+        <ui:VisualElement name="screen-about" class="screen screen--paper hidden">
+            <ui:VisualElement class="header">
+                <ui:Button name="about-back" text="← Despre" class="back-btn" />
+            </ui:VisualElement>
+            <ui:ScrollView class="grow">
+                <ui:Label text="Despre 3Times" class="h3" />
+                <ui:Label text="Aplicație de realitate augmentată care arată povestea locurilor: trecut, prezent și viitor. Prima versiune acoperă Piața Victoriei din Timișoara." class="body section" />
+                <ui:Label text="Surse și licențe" class="h3" />
+                <ui:Label text="Sursa și licența fiecărei fotografii și înregistrări istorice vor apărea aici, odată cu conținutul." class="body section" />
+                <ui:Label text="Confidențialitate" class="h3" />
+                <ui:Label text="Aplicația folosește camera și locația telefonului. Imaginile camerei nu se salvează. Urmele pe care le lași conțin locul în care le-ai lăsat și pot fi șterse oricând, la cerere." class="body section" />
+                <ui:Label text="Proiect Codesign Hardware/Software, Universitatea Politehnica Timișoara, 2026–2027." class="caption" />
+            </ui:ScrollView>
+        </ui:VisualElement>
+
+        <!-- Mesaj scurt (toast) -->
+        <ui:Label name="toast" class="toast hidden" picking-mode="Ignore" />
+    </ui:VisualElement>
+</ui:UXML>

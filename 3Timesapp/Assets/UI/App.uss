@@ -1,0 +1,411 @@
+/* 3Times: stilurile interfeței.
+   Dimensiunile sunt pentru rezoluția de referință 1080 × 1920 (vezi Panel Settings). */
+
+:root {
+    --ink: #17161A;
+    --ink-pressed: #34323A;
+    --paper: #F4F1EA;
+    --paper-2: #E9E4D8;
+    --text: #3B3934;
+    --muted: #6E6A63;
+    --line: #D5CFC2;
+    --glass: rgba(20, 19, 23, 0.62);
+    --white: #FFFFFF;
+    --good: #46C37B;
+    --low: #F2B33D;
+    --none: #9A9A9A;
+
+    /* emoțiile urmelor (din machete), folosite din pasul 4 */
+    --joy: #F6D77A;
+    --sadness: #A9C2EE;
+    --longing: #CDB2EC;
+}
+
+/* ---------- structură ---------- */
+
+.app {
+    -unity-font: url("Fonts/Inter-Variable.ttf"); /* Inter are diacritice românești */
+    position: absolute;
+    left: 0; top: 0; right: 0; bottom: 0;
+}
+
+.screen {
+    position: absolute;
+    left: 0; top: 0; right: 0; bottom: 0;
+    flex-direction: column;
+    padding: 40px; /* UIRouter adaugă peste el zona sigură (notch, bara de navigare) */
+}
+
+.screen--dark  { background-color: var(--ink); }
+.screen--paper { background-color: var(--paper); }
+.screen--clear { background-color: rgba(0, 0, 0, 0); }
+
+.hidden { display: none; }
+.grow { flex-grow: 1; }
+.center { justify-content: center; align-items: center; }
+.row { flex-direction: row; align-items: center; }
+.gap-left { margin-left: 20px; }
+.text-center { -unity-text-align: middle-center; }
+
+/* ---------- text ---------- */
+
+.splash-title {
+    font-size: 160px;
+    color: var(--paper);
+    -unity-font-style: bold;
+    letter-spacing: 4px;
+}
+
+.splash-subtitle {
+    font-size: 40px;
+    color: #BDB7AA;
+    margin-top: 12px;
+    letter-spacing: 6px;
+}
+
+.h1 {
+    font-size: 72px;
+    -unity-font-style: bold;
+    color: var(--ink);
+    white-space: normal;
+    margin-bottom: 28px;
+}
+
+.h2 {
+    font-size: 52px;
+    -unity-font-style: bold;
+    color: var(--ink);
+}
+
+.h3 {
+    font-size: 42px;
+    -unity-font-style: bold;
+    color: var(--ink);
+    margin-bottom: 12px;
+}
+
+.body {
+    font-size: 38px;
+    color: var(--text);
+    white-space: normal;
+    margin-bottom: 16px;
+}
+
+.body--light { color: #E8E3D6; }
+.body--last { margin-bottom: 0; }
+
+.caption {
+    font-size: 32px;
+    color: var(--muted);
+    white-space: normal;
+}
+
+.section { margin-bottom: 40px; }
+
+.card {
+    background-color: var(--paper-2);
+    border-radius: 28px;
+    padding: 36px;
+    margin-top: 24px;
+}
+
+/* ---------- butoane ---------- */
+
+.btn {
+    height: 128px;
+    margin: 0;
+    padding: 0 36px;
+    border-width: 0;
+    border-radius: 28px;
+    font-size: 40px;
+    -unity-font-style: bold;
+    -unity-text-align: middle-center;
+}
+
+.btn--primary,
+.btn--primary:hover {
+    background-color: var(--ink);
+    color: var(--paper);
+}
+.btn--primary:active { background-color: var(--ink-pressed); }
+
+.btn--secondary,
+.btn--secondary:hover {
+    background-color: var(--white);
+    color: var(--ink);
+    border-width: 3px;
+    border-color: var(--line);
+}
+.btn--secondary:active { background-color: var(--paper-2); }
+
+.btn--ghost,
+.btn--ghost:hover,
+.btn--ghost:active {
+    background-color: rgba(0, 0, 0, 0);
+    color: var(--ink);
+    margin-top: 16px;
+}
+
+/* ---------- încărcare ---------- */
+
+.spinner {
+    width: 96px;
+    height: 96px;
+    border-radius: 48px;
+    border-width: 8px;
+    border-color: rgba(255, 255, 255, 0.18);
+    border-top-color: var(--paper);
+    margin-bottom: 44px;
+}
+
+.spinner--small {
+    width: 52px;
+    height: 52px;
+    border-radius: 26px;
+    border-width: 6px;
+    border-color: rgba(0, 0, 0, 0.12);
+    border-top-color: var(--ink);
+    margin: 0 24px 0 0;
+}
+
+/* ---------- localizare ---------- */
+
+.sheet {
+    background-color: rgba(244, 241, 234, 0.96);
+    border-radius: 40px;
+    padding: 44px;
+}
+
+.sheet-title { margin-bottom: 24px; }
+.timeout { margin-top: 28px; }
+
+/* ---------- ecranul principal ---------- */
+
+.topbar {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.chip {
+    flex-direction: row;
+    align-items: center;
+    background-color: var(--glass);
+    border-radius: 44px;
+    padding: 20px 32px;
+}
+
+.dot {
+    width: 24px;
+    height: 24px;
+    border-radius: 12px;
+    margin-right: 16px;
+}
+.dot--good { background-color: var(--good); }
+.dot--low  { background-color: var(--low); }
+.dot--none { background-color: var(--none); }
+
+.chip-label {
+    font-size: 32px;
+    color: var(--white);
+}
+
+.icon-btn,
+.icon-btn:hover,
+.icon-btn:active {
+    width: 108px;
+    height: 108px;
+    margin: 0;
+    padding: 32px 28px;
+    border-width: 0;
+    border-radius: 32px;
+    background-color: var(--glass);
+    justify-content: space-between;
+}
+
+.bar {
+    height: 6px;
+    border-radius: 3px;
+    background-color: var(--white);
+}
+
+.hint {
+    align-self: center;
+    margin-bottom: 28px;
+    padding: 14px 28px;
+    border-radius: 24px;
+    background-color: var(--glass);
+    color: var(--white);
+    font-size: 34px;
+    white-space: normal;
+    -unity-text-align: middle-center;
+}
+
+.actions {
+    flex-direction: row;
+    margin-bottom: 32px;
+}
+
+/* Peste imaginea camerei butoanele trebuie să se vadă și pe fundal închis, și pe fundal deschis:
+   butonul principal e deschis la culoare, cele secundare sunt „sticlă” cu contur. */
+.action-main,
+.action-main:hover {
+    flex-grow: 1.6;
+    background-color: var(--paper);
+    color: var(--ink);
+}
+.action-main:active { background-color: var(--paper-2); }
+
+.action,
+.action:hover {
+    background-color: var(--glass);
+    color: var(--white);
+    border-width: 3px;
+    border-color: rgba(255, 255, 255, 0.55);
+}
+.action:active { background-color: rgba(20, 19, 23, 0.8); }
+.action {
+    flex-grow: 1;
+    margin-left: 18px;
+    padding: 0 12px;
+}
+
+/* ---------- cursorul timpului ---------- */
+
+.timebar {
+    background-color: var(--glass);
+    border-radius: 40px;
+    padding: 24px 56px 12px 56px;
+}
+
+.time-slider {
+    height: 80px;
+    justify-content: center;
+}
+
+.time-track {
+    height: 8px;
+    border-radius: 4px;
+    background-color: rgba(255, 255, 255, 0.35);
+}
+
+.tick {
+    position: absolute;
+    top: -5px;
+    width: 18px;
+    height: 18px;
+    border-radius: 9px;
+    background-color: rgba(255, 255, 255, 0.75);
+    translate: -50% 0;
+}
+.tick--past    { left: 0%; }
+.tick--present { left: 50%; }
+.tick--future  { left: 100%; }
+
+.time-knob {
+    position: absolute;
+    top: -28px;
+    left: 50%;
+    width: 64px;
+    height: 64px;
+    border-radius: 32px;
+    border-width: 6px;
+    border-color: var(--ink);
+    background-color: var(--paper);
+    translate: -50% 0;
+    transition-property: left;
+    transition-duration: 0.22s;
+    transition-timing-function: ease-out-cubic;
+}
+
+.time-knob--dragging { transition-duration: 0s; }
+
+.time-labels {
+    flex-direction: row;
+    justify-content: space-between;
+    margin: 4px -40px 0 -40px;
+}
+
+.time-label,
+.time-label:hover,
+.time-label:active {
+    width: 220px;
+    margin: 0;
+    padding: 12px 0;
+    border-width: 0;
+    background-color: rgba(0, 0, 0, 0);
+    color: #D9D4C8;
+    font-size: 34px;
+    -unity-text-align: middle-center;
+}
+
+.time-label--left  { -unity-text-align: middle-left;  padding-left: 40px; }
+.time-label--right { -unity-text-align: middle-right; padding-right: 40px; }
+.time-label--active { color: var(--white); -unity-font-style: bold; }
+.time-label--locked { color: rgba(255, 255, 255, 0.45); }
+
+/* ---------- meniu și despre ---------- */
+
+.header {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 40px;
+}
+
+.close-btn,
+.close-btn:hover,
+.close-btn:active {
+    width: 108px;
+    height: 108px;
+    margin: 0;
+    border-width: 3px;
+    border-color: var(--line);
+    border-radius: 28px;
+    background-color: var(--white);
+    color: var(--ink);
+    font-size: 56px;
+}
+
+.back-btn,
+.back-btn:hover,
+.back-btn:active {
+    margin: 0;
+    padding: 16px 0;
+    border-width: 0;
+    background-color: rgba(0, 0, 0, 0);
+    color: var(--ink);
+    font-size: 44px;
+    -unity-font-style: bold;
+}
+
+.list-item,
+.list-item:hover {
+    height: 128px;
+    margin: 0 0 20px 0;
+    padding: 0 36px;
+    border-width: 3px;
+    border-color: var(--line);
+    border-radius: 24px;
+    background-color: var(--white);
+    color: var(--ink);
+    font-size: 38px;
+    -unity-text-align: middle-left;
+}
+.list-item:active { background-color: var(--paper-2); }
+
+/* ---------- toast ---------- */
+
+.toast {
+    position: absolute;
+    left: 60px;
+    right: 60px;
+    bottom: 520px;
+    padding: 28px 36px;
+    border-radius: 28px;
+    background-color: rgba(23, 22, 26, 0.92);
+    color: var(--paper);
+    font-size: 34px;
+    white-space: normal;
+    -unity-text-align: middle-center;
+}
