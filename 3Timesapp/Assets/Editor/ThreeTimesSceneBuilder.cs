@@ -120,7 +120,7 @@ namespace ThreeTimes.EditorTools
             }
             panel.themeStyleSheet = AssetDatabase.LoadAssetAtPath<ThemeStyleSheet>(ThemePath);
             panel.scaleMode = PanelScaleMode.ScaleWithScreenSize;
-            panel.referenceResolution = new Vector2Int(1080, 1920);
+            panel.referenceResolution = new Vector2Int(390, 844); // dimensiunile machetei din canvas
             panel.screenMatchMode = PanelScreenMatchMode.MatchWidthOrHeight;
             panel.match = 0f;
             panel.clearColor = false;
@@ -158,7 +158,7 @@ namespace ThreeTimes.EditorTools
             cameraGo.tag = "MainCamera";
             var camera = cameraGo.GetComponent<Camera>();
             camera.clearFlags = CameraClearFlags.SolidColor;
-            camera.backgroundColor = new Color(0.09f, 0.086f, 0.1f); // în Editor nu există imaginea camerei
+            camera.backgroundColor = new Color(0.957f, 0.961f, 0.984f); // în Editor nu există imaginea camerei
             camera.nearClipPlane = 0.1f;
             camera.farClipPlane = 1000f; // clădirile pot fi la zeci-sute de metri
 

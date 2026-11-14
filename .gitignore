@@ -28,3 +28,6 @@ backend/.gradle/
 
 # Notițe locale de configurare (nu intră în repo)
 docs/SETUP-UNITY.md
+
+# Setări rămase de la pachetul Unity AI (scos din proiect)
+3Timesapp/ProjectSettings/Packages/com.unity.ai.assistant/

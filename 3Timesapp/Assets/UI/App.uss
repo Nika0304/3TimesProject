@@ -1,30 +1,82 @@
-/* 3Times: stilurile interfeței.
-   Dimensiunile sunt pentru rezoluția de referință 1080 × 1920 (vezi Panel Settings). */
+/* 3Times: stilurile interfeței (direcția „Direcția aleasă” din canvas).
+   Dimensiunile sunt în px de machetă, pentru rezoluția de referință 390 × 844 (Panel Settings). */
 
 :root {
-    --ink: #17161A;
-    --ink-pressed: #34323A;
-    --paper: #F4F1EA;
-    --paper-2: #E9E4D8;
-    --text: #3B3934;
-    --muted: #6E6A63;
-    --line: #D5CFC2;
-    --glass: rgba(20, 19, 23, 0.62);
-    --white: #FFFFFF;
-    --good: #46C37B;
-    --low: #F2B33D;
-    --none: #9A9A9A;
+    --bg: #F4F5FB;
+    --surface: #FFFFFF;
+    --line: #E4E2EF;
+    --ink: #1F3A5F;
+    --muted: #6B6785;
+    --coral: #FF8A6E;
+    --coral-pressed: #F27A5E;
+    --on-coral: #2B1712;
+    --logo-times: #E0664B;
+    --green: #1E7A64;
 
-    /* emoțiile urmelor (din machete), folosite din pasul 4 */
-    --joy: #F6D77A;
-    --sadness: #A9C2EE;
-    --longing: #CDB2EC;
+    --past: #8A6233;
+    --past-icon: #B98A52;
+    --past-tint: #F6E9D7;
+    --present: #C24F35;
+    --present-icon: #E0674C;
+    --present-tint: #FFE4DC;
+    --future: #1E7A64;
+    --future-icon: #2F9C82;
+    --future-tint: #DDF3EC;
+
+    --good: #3FBF8F;
+    --low: #F2B33D;
+    --none: #B8B5C9;
+    --lilac: #9C78E3;
+}
+
+/* ---------- fonturi ---------- */
+
+.app,
+.f-body {
+    -unity-font: url("Fonts/Figtree-Regular.ttf");
+    -unity-font-definition: initial;
+}
+.f-semi {
+    -unity-font: url("Fonts/Figtree-SemiBold.ttf");
+    -unity-font-definition: initial;
+}
+.f-bold,
+.btn,
+.logo__three,
+.mode-label,
+.time-label--sans,
+.pill-btn {
+    -unity-font: url("Fonts/Figtree-ExtraBold.ttf");
+    -unity-font-definition: initial;
+    -unity-font-style: normal;
+}
+.f-serif,
+.display,
+.title,
+.mode-word,
+.mode-title,
+.splash-tagline {
+    -unity-font: url("Fonts/Fraunces-Medium.ttf");
+    -unity-font-definition: initial;
+    -unity-font-style: normal;
+}
+.f-italic,
+.logo__times,
+.time-label--serif {
+    -unity-font: url("Fonts/Fraunces-Italic.ttf");
+    -unity-font-definition: initial;
+    -unity-font-style: normal;
 }
 
 /* ---------- structură ---------- */
 
 .app {
-    -unity-font: url("Fonts/Inter-Variable.ttf"); /* Inter are diacritice românești */
+    position: absolute;
+    left: 0; top: 0; right: 0; bottom: 0;
+    color: var(--ink);
+}
+
+.fill {
     position: absolute;
     left: 0; top: 0; right: 0; bottom: 0;
 }
@@ -32,380 +84,428 @@
 .screen {
     position: absolute;
     left: 0; top: 0; right: 0; bottom: 0;
-    flex-direction: column;
-    padding: 40px; /* UIRouter adaugă peste el zona sigură (notch, bara de navigare) */
 }
+.screen--paper { background-color: var(--bg); }
 
-.screen--dark  { background-color: var(--ink); }
-.screen--paper { background-color: var(--paper); }
-.screen--clear { background-color: rgba(0, 0, 0, 0); }
+/* UIRouter adaugă aici zona sigură (notch, bara de jos) peste marginea de bază. */
+.safe {
+    flex-grow: 1;
+    flex-direction: column;
+    padding: 20px;
+}
 
 .hidden { display: none; }
 .grow { flex-grow: 1; }
 .center { justify-content: center; align-items: center; }
 .row { flex-direction: row; align-items: center; }
-.gap-left { margin-left: 20px; }
+.gap-left { margin-left: 10px; }
 .text-center { -unity-text-align: middle-center; }
+
+.backdrop {
+    background-image: url("Images/square-full.png");
+    -unity-background-scale-mode: scale-and-crop;
+}
+
+/* ---------- logo ---------- */
+
+.logo { flex-direction: row; align-items: flex-end; }
+.logo__three { font-size: 26px; color: var(--ink); padding: 0; margin: 0; }
+.logo__times { font-size: 26px; color: var(--logo-times); padding: 0; margin: 0 0 0 1px; }
+.logo--big .logo__three,
+.logo--big .logo__times { font-size: 64px; }
+
+.splash-tagline { font-size: 20px; color: var(--muted); margin-top: 10px; }
 
 /* ---------- text ---------- */
 
-.splash-title {
-    font-size: 160px;
-    color: var(--paper);
-    -unity-font-style: bold;
-    letter-spacing: 4px;
-}
-
-.splash-subtitle {
-    font-size: 40px;
-    color: #BDB7AA;
-    margin-top: 12px;
-    letter-spacing: 6px;
-}
-
-.h1 {
-    font-size: 72px;
-    -unity-font-style: bold;
+.display {
+    font-size: 42px;
     color: var(--ink);
     white-space: normal;
-    margin-bottom: 28px;
+    margin: 0 0 10px 0;
+    padding: 0;
 }
+.display--small { font-size: 32px; color: var(--ink); }
 
-.h2 {
-    font-size: 52px;
-    -unity-font-style: bold;
-    color: var(--ink);
-}
+.title { font-size: 22px; color: var(--ink); margin: 0; padding: 0; }
+.title--big { font-size: 28px; }
 
-.h3 {
-    font-size: 42px;
-    -unity-font-style: bold;
-    color: var(--ink);
-    margin-bottom: 12px;
+.lead {
+    font-size: 16px;
+    color: var(--muted);
+    white-space: normal;
+    margin: 0 0 16px 0;
+    padding: 0;
 }
 
 .body {
-    font-size: 38px;
-    color: var(--text);
+    font-size: 15px;
+    color: var(--ink);
     white-space: normal;
-    margin-bottom: 16px;
+    margin: 8px 0;
+    padding: 0;
 }
-
-.body--light { color: #E8E3D6; }
-.body--last { margin-bottom: 0; }
 
 .caption {
-    font-size: 32px;
+    font-size: 13px;
     color: var(--muted);
     white-space: normal;
-}
-
-.section { margin-bottom: 40px; }
-
-.card {
-    background-color: var(--paper-2);
-    border-radius: 28px;
-    padding: 36px;
-    margin-top: 24px;
-}
-
-/* ---------- butoane ---------- */
-
-.btn {
-    height: 128px;
     margin: 0;
-    padding: 0 36px;
-    border-width: 0;
-    border-radius: 28px;
-    font-size: 40px;
-    -unity-font-style: bold;
+    padding: 0;
+}
+
+.section { margin-bottom: 24px; }
+
+.fineprint {
+    font-size: 12px;
+    color: var(--muted);
     -unity-text-align: middle-center;
+    margin-top: 10px;
 }
 
-.btn--primary,
-.btn--primary:hover {
-    background-color: var(--ink);
-    color: var(--paper);
+/* ---------- pornire ---------- */
+
+.hero-image {
+    position: absolute;
+    left: 0; right: 0; top: 0;
+    height: 340px;
+    background-image: url("Images/square.png");
+    -unity-background-scale-mode: scale-and-crop;
 }
-.btn--primary:active { background-color: var(--ink-pressed); }
-
-.btn--secondary,
-.btn--secondary:hover {
-    background-color: var(--white);
-    color: var(--ink);
-    border-width: 3px;
-    border-color: var(--line);
-}
-.btn--secondary:active { background-color: var(--paper-2); }
-
-.btn--ghost,
-.btn--ghost:hover,
-.btn--ghost:active {
-    background-color: rgba(0, 0, 0, 0);
-    color: var(--ink);
-    margin-top: 16px;
-}
-
-/* ---------- încărcare ---------- */
-
-.spinner {
-    width: 96px;
-    height: 96px;
-    border-radius: 48px;
-    border-width: 8px;
-    border-color: rgba(255, 255, 255, 0.18);
-    border-top-color: var(--paper);
-    margin-bottom: 44px;
-}
-
-.spinner--small {
-    width: 52px;
-    height: 52px;
-    border-radius: 26px;
-    border-width: 6px;
-    border-color: rgba(0, 0, 0, 0.12);
-    border-top-color: var(--ink);
-    margin: 0 24px 0 0;
-}
-
-/* ---------- localizare ---------- */
-
-.sheet {
-    background-color: rgba(244, 241, 234, 0.96);
-    border-radius: 40px;
-    padding: 44px;
-}
-
-.sheet-title { margin-bottom: 24px; }
-.timeout { margin-top: 28px; }
-
-/* ---------- ecranul principal ---------- */
+.hero-spacer { height: 238px; flex-shrink: 1; }
 
 .topbar {
     flex-direction: row;
     justify-content: space-between;
     align-items: center;
+    height: 48px;
 }
 
-.chip {
+.modes-card {
+    background-color: var(--surface);
+    border-width: 1px;
+    border-color: var(--line);
+    border-radius: 22px;
+    margin-top: 4px;
+}
+
+.mode-row {
     flex-direction: row;
+    align-items: flex-start;
+    padding: 13px 16px;
+    border-bottom-width: 1px;
+    border-color: var(--line);
+}
+.mode-row--last { border-bottom-width: 0; }
+
+.mode-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 20px;
     align-items: center;
-    background-color: var(--glass);
-    border-radius: 44px;
-    padding: 20px 32px;
+    justify-content: center;
+    margin-right: 14px;
+    flex-shrink: 0;
+}
+.mode-icon--past { background-color: var(--past-tint); }
+.mode-icon--present { background-color: var(--present-tint); }
+.mode-icon--future { background-color: var(--future-tint); }
+
+.mode-text { flex-shrink: 1; flex-grow: 1; }
+.mode-title { font-size: 19px; margin: 0; padding: 0; }
+.mode-title--past { color: var(--past); }
+.mode-title--present { color: var(--present); }
+.mode-title--future { color: var(--future); }
+.mode-desc { font-size: 14px; color: var(--muted); white-space: normal; margin: 2px 0 0 0; padding: 0; }
+
+/* ---------- pictograme (PNG albe, colorate prin tint) ---------- */
+
+.icon {
+    width: 20px;
+    height: 20px;
+    -unity-background-scale-mode: scale-to-fit;
+    -unity-background-image-tint-color: var(--ink);
+}
+.icon--map      { background-image: url("Images/Icons/icon-map.png"); }
+.icon--postcard { background-image: url("Images/Icons/icon-postcard.png"); }
+.icon--close    { background-image: url("Images/Icons/icon-close.png"); }
+.icon--back     { background-image: url("Images/Icons/icon-back.png"); }
+.icon--chevron  { background-image: url("Images/Icons/icon-chevron.png"); -unity-background-image-tint-color: var(--muted); width: 18px; height: 18px; }
+.icon--past     { background-image: url("Images/Icons/icon-past.png"); -unity-background-image-tint-color: var(--past-icon); width: 18px; height: 18px; }
+.icon--present  { background-image: url("Images/Icons/icon-present.png"); -unity-background-image-tint-color: var(--present-icon); width: 18px; height: 18px; }
+.icon--future   { background-image: url("Images/Icons/icon-future.png"); -unity-background-image-tint-color: var(--future-icon); width: 18px; height: 18px; }
+
+/* ---------- butoane ---------- */
+
+.btn,
+.btn:hover {
+    height: 54px;
+    margin: 0;
+    padding: 0 20px;
+    border-width: 0;
+    border-radius: 27px;
+    font-size: 16px;
+    -unity-text-align: middle-center;
+    background-color: var(--surface);
+    color: var(--ink);
 }
 
-.dot {
-    width: 24px;
-    height: 24px;
-    border-radius: 12px;
-    margin-right: 16px;
+.btn--primary,
+.btn--primary:hover {
+    background-color: var(--coral);
+    color: var(--on-coral);
 }
+.btn--primary:active { background-color: var(--coral-pressed); }
+
+.btn--secondary,
+.btn--secondary:hover {
+    background-color: var(--surface);
+    color: var(--ink);
+    border-width: 1px;
+    border-color: var(--line);
+}
+.btn--secondary:active { background-color: var(--bg); }
+
+.btn--ghost,
+.btn--ghost:hover,
+.btn--ghost:active {
+    background-color: rgba(0, 0, 0, 0);
+    color: var(--muted);
+    margin-top: 6px;
+}
+
+.pill-btn,
+.pill-btn:hover,
+.pill-btn:active {
+    height: 36px;
+    margin: 0;
+    padding: 0 14px;
+    border-width: 1px;
+    border-color: var(--line);
+    border-radius: 18px;
+    background-color: rgba(255, 255, 255, 0.85);
+    color: var(--ink);
+    font-size: 13px;
+}
+
+.round-btn,
+.round-btn:hover {
+    width: 44px;
+    height: 44px;
+    margin: 0;
+    padding: 0;
+    border-width: 1px;
+    border-color: var(--line);
+    border-radius: 22px;
+    background-color: rgba(255, 255, 255, 0.9);
+    align-items: center;
+    justify-content: center;
+}
+.round-btn:active { background-color: var(--bg); }
+.round-btn--big { width: 52px; height: 52px; border-radius: 26px; flex-shrink: 0; }
+
+.menu-bars { width: 18px; height: 9px; justify-content: space-between; }
+.bar { height: 2px; width: 18px; border-radius: 1px; background-color: var(--ink); }
+.bar--short { width: 12px; align-self: flex-end; }
+
+/* ---------- încărcare ---------- */
+
+.spinner {
+    width: 56px;
+    height: 56px;
+    border-radius: 28px;
+    border-width: 5px;
+    border-color: var(--line);
+    border-top-color: var(--coral);
+    margin-bottom: 24px;
+}
+.spinner--small {
+    width: 28px;
+    height: 28px;
+    border-radius: 14px;
+    border-width: 3px;
+    margin: 0 12px 0 0;
+}
+
+/* ---------- localizare ---------- */
+
+.sheet {
+    background-color: var(--surface);
+    border-radius: 28px;
+    padding: 22px;
+}
+.timeout { margin-top: 12px; }
+
+/* ---------- ecranul principal ---------- */
+
+.past-tint { background-color: rgba(196, 150, 96, 0.32); }
+
+.fade-top {
+    position: absolute;
+    left: 0; right: 0; top: 0;
+    height: 230px;
+    background-image: url("Images/fade-top.png");
+    -unity-background-scale-mode: stretch-to-fill;
+}
+.fade-bottom {
+    position: absolute;
+    left: 0; right: 0; bottom: 0;
+    height: 300px;
+    background-image: url("Images/fade-bottom.png");
+    -unity-background-scale-mode: stretch-to-fill;
+}
+
+.mode-head { margin-top: 10px; }
+.mode-label { font-size: 14px; color: var(--present); margin: 0; padding: 0; }
+.mode-label--past { color: var(--past); }
+.mode-label--future { color: var(--future); }
+.mode-word { font-size: 62px; color: var(--ink); margin: -4px 0 0 0; padding: 0; }
+
+.status { flex-direction: row; align-items: center; margin-top: 6px; }
+.dot { width: 8px; height: 8px; border-radius: 4px; margin-right: 8px; }
 .dot--good { background-color: var(--good); }
 .dot--low  { background-color: var(--low); }
 .dot--none { background-color: var(--none); }
 
-.chip-label {
-    font-size: 32px;
-    color: var(--white);
-}
-
-.icon-btn,
-.icon-btn:hover,
-.icon-btn:active {
-    width: 108px;
-    height: 108px;
-    margin: 0;
-    padding: 32px 28px;
-    border-width: 0;
-    border-radius: 32px;
-    background-color: var(--glass);
-    justify-content: space-between;
-}
-
-.bar {
-    height: 6px;
-    border-radius: 3px;
-    background-color: var(--white);
-}
-
 .hint {
     align-self: center;
-    margin-bottom: 28px;
-    padding: 14px 28px;
-    border-radius: 24px;
-    background-color: var(--glass);
-    color: var(--white);
-    font-size: 34px;
+    font-size: 13px;
+    color: var(--muted);
     white-space: normal;
     -unity-text-align: middle-center;
+    margin-bottom: 12px;
 }
 
 .actions {
     flex-direction: row;
-    margin-bottom: 32px;
+    align-items: center;
+    margin-bottom: 12px;
 }
-
-/* Peste imaginea camerei butoanele trebuie să se vadă și pe fundal închis, și pe fundal deschis:
-   butonul principal e deschis la culoare, cele secundare sunt „sticlă” cu contur. */
-.action-main,
-.action-main:hover {
-    flex-grow: 1.6;
-    background-color: var(--paper);
-    color: var(--ink);
-}
-.action-main:active { background-color: var(--paper-2); }
-
-.action,
-.action:hover {
-    background-color: var(--glass);
-    color: var(--white);
-    border-width: 3px;
-    border-color: rgba(255, 255, 255, 0.55);
-}
-.action:active { background-color: rgba(20, 19, 23, 0.8); }
-.action {
-    flex-grow: 1;
-    margin-left: 18px;
-    padding: 0 12px;
-}
+.action-main { flex-grow: 1; margin: 0 10px; }
 
 /* ---------- cursorul timpului ---------- */
 
 .timebar {
-    background-color: var(--glass);
-    border-radius: 40px;
-    padding: 24px 56px 12px 56px;
+    background-color: var(--surface);
+    border-width: 1px;
+    border-color: var(--line);
+    border-radius: 26px;
+    padding: 14px 18px 2px 18px;
 }
 
-.time-slider {
-    height: 80px;
-    justify-content: center;
-}
+.time-slider { height: 36px; justify-content: center; }
 
 .time-track {
-    height: 8px;
-    border-radius: 4px;
-    background-color: rgba(255, 255, 255, 0.35);
+    height: 6px;
+    border-radius: 3px;
+    background-image: url("Images/track.png");
+    -unity-background-scale-mode: stretch-to-fill;
 }
 
-.tick {
+.year-dot {
     position: absolute;
-    top: -5px;
-    width: 18px;
-    height: 18px;
-    border-radius: 9px;
-    background-color: rgba(255, 255, 255, 0.75);
+    top: -2px;
+    width: 10px;
+    height: 10px;
+    border-radius: 5px;
+    background-color: var(--past-icon);
     translate: -50% 0;
 }
-.tick--past    { left: 0%; }
-.tick--present { left: 50%; }
-.tick--future  { left: 100%; }
+.year-dot--1900 { left: 7%; }
+.year-dot--1918 { left: 20%; }
+.year-dot--1989 {
+    left: 35%;
+    top: -4px;
+    width: 14px;
+    height: 14px;
+    border-radius: 7px;
+    border-width: 2px;
+    border-color: var(--surface);
+    background-color: var(--lilac);
+}
 
 .time-knob {
     position: absolute;
-    top: -28px;
+    top: -14px;
     left: 50%;
-    width: 64px;
-    height: 64px;
-    border-radius: 32px;
-    border-width: 6px;
-    border-color: var(--ink);
-    background-color: var(--paper);
+    width: 34px;
+    height: 34px;
+    border-radius: 17px;
+    border-width: 4px;
+    background-color: var(--surface);
+    align-items: center;
+    justify-content: center;
     translate: -50% 0;
     transition-property: left;
-    transition-duration: 0.22s;
+    transition-duration: 0.25s;
     transition-timing-function: ease-out-cubic;
 }
-
 .time-knob--dragging { transition-duration: 0s; }
+.knob-core { width: 10px; height: 10px; border-radius: 5px; }
+
+.knob--past { border-color: var(--past-icon); }
+.knob--past .knob-core { background-color: var(--past-icon); }
+.knob--present { border-color: var(--coral); }
+.knob--present .knob-core { background-color: var(--coral); }
+.knob--future { border-color: var(--future-icon); }
+.knob--future .knob-core { background-color: var(--future-icon); }
 
 .time-labels {
     flex-direction: row;
     justify-content: space-between;
-    margin: 4px -40px 0 -40px;
+    margin: 0 -6px;
 }
 
 .time-label,
 .time-label:hover,
 .time-label:active {
-    width: 220px;
+    width: 110px;
+    height: 36px;
     margin: 0;
-    padding: 12px 0;
+    padding: 0;
     border-width: 0;
     background-color: rgba(0, 0, 0, 0);
-    color: #D9D4C8;
-    font-size: 34px;
+    color: #8C88A5;
+    font-size: 15px;
     -unity-text-align: middle-center;
 }
+.time-label--serif { font-size: 16px; }
+.time-label--left { -unity-text-align: middle-left; }
+.time-label--right { -unity-text-align: middle-right; }
+.time-label--active { color: var(--ink); }
+.time-label--past-active { color: var(--past); }
+.time-label--future-active { color: var(--future); }
 
-.time-label--left  { -unity-text-align: middle-left;  padding-left: 40px; }
-.time-label--right { -unity-text-align: middle-right; padding-right: 40px; }
-.time-label--active { color: var(--white); -unity-font-style: bold; }
-.time-label--locked { color: rgba(255, 255, 255, 0.45); }
-
-/* ---------- meniu și despre ---------- */
-
-.header {
-    flex-direction: row;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 40px;
-}
-
-.close-btn,
-.close-btn:hover,
-.close-btn:active {
-    width: 108px;
-    height: 108px;
-    margin: 0;
-    border-width: 3px;
-    border-color: var(--line);
-    border-radius: 28px;
-    background-color: var(--white);
-    color: var(--ink);
-    font-size: 56px;
-}
-
-.back-btn,
-.back-btn:hover,
-.back-btn:active {
-    margin: 0;
-    padding: 16px 0;
-    border-width: 0;
-    background-color: rgba(0, 0, 0, 0);
-    color: var(--ink);
-    font-size: 44px;
-    -unity-font-style: bold;
-}
+/* ---------- meniu ---------- */
 
 .list-item,
 .list-item:hover {
-    height: 128px;
-    margin: 0 0 20px 0;
-    padding: 0 36px;
-    border-width: 3px;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    height: 60px;
+    margin: 14px 0 0 0;
+    padding: 0 18px;
+    border-width: 1px;
     border-color: var(--line);
-    border-radius: 24px;
-    background-color: var(--white);
-    color: var(--ink);
-    font-size: 38px;
-    -unity-text-align: middle-left;
+    border-radius: 20px;
+    background-color: var(--surface);
 }
-.list-item:active { background-color: var(--paper-2); }
+.list-item:active { background-color: var(--bg); }
+.list-item__text { font-size: 16px; color: var(--ink); margin: 0; padding: 0; }
 
 /* ---------- toast ---------- */
 
 .toast {
     position: absolute;
-    left: 60px;
-    right: 60px;
-    bottom: 520px;
-    padding: 28px 36px;
-    border-radius: 28px;
-    background-color: rgba(23, 22, 26, 0.92);
-    color: var(--paper);
-    font-size: 34px;
+    left: 24px;
+    right: 24px;
+    bottom: 220px;
+    padding: 12px 18px;
+    border-radius: 18px;
+    background-color: var(--ink);
+    color: #FFFFFF;
+    font-size: 14px;
     white-space: normal;
     -unity-text-align: middle-center;
 }

@@ -23,7 +23,7 @@ namespace ThreeTimes.Core
         [SerializeField] GameObject arRoot;
 
         [Header("Timpi (secunde)")]
-        [SerializeField] float splashSeconds = 1.5f;
+        [SerializeField] float splashSeconds = 1f;
         [SerializeField] float locationTimeout = 15f;
         [SerializeField] float vpsTimeout = 10f;
         [SerializeField] float geospatialSupportTimeout = 15f;
@@ -56,6 +56,7 @@ namespace ThreeTimes.Core
 
         void Start()
         {
+            ui.Simulated = Simulated;
             ui.Init();
             mainView.Init();
 
@@ -88,14 +89,19 @@ namespace ThreeTimes.Core
                 yield return new WaitForSecondsRealtime(splashSeconds);
             }
 
-            // 1. Onboarding și permisiuni
-            if (!AppPrefs.OnboardingSeen || !PermissionService.HasAll())
+            // 1. Ecranul de pornire apare la fiecare deschidere; „Începe” duce mai departe.
+            //    La o reîncercare după o eroare nu-l mai arătăm.
+            if (showSplash)
             {
                 Go(AppState.Onboarding);
                 continueRequested = false;
                 yield return new WaitUntil(() => continueRequested);
                 AppPrefs.OnboardingSeen = true;
+            }
 
+            // Permisiunile se cer doar dacă lipsesc.
+            if (!PermissionService.HasAll())
+            {
                 bool granted = false;
                 yield return PermissionService.RequestAll(ok => granted = ok);
                 if (!granted) { Fail(AppErrorKind.PermissionsDenied); yield break; }

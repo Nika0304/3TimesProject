@@ -14,8 +14,11 @@ namespace ThreeTimes.UI
     [RequireComponent(typeof(UIDocument))]
     public class UIRouter : MonoBehaviour
     {
-        [Tooltip("Marginea de bază a ecranelor, în px de referință (peste ea se adaugă zona sigură).")]
-        [SerializeField] float basePadding = 40f;
+        [Tooltip("Marginea de bază a ecranelor, în px de machetă (peste ea se adaugă zona sigură).")]
+        [SerializeField] float basePadding = 20f;
+
+        /// <summary>În Editor (simulare) arătăm o ilustrație a pieței în locul imaginii camerei.</summary>
+        public bool Simulated { get; set; }
 
         public VisualElement Root { get; private set; }
 
@@ -30,7 +33,7 @@ namespace ThreeTimes.UI
         readonly List<VisualElement> spinners = new List<VisualElement>();
 
         Label checkingStatus, localizingAccuracy, errorTitle, errorMessage, toast;
-        VisualElement localizingTimeout;
+        VisualElement localizingTimeout, backdrop;
         Button errorPrimary, errorSecondary;
         IVisualElementScheduledItem toastHide;
 
@@ -63,6 +66,7 @@ namespace ThreeTimes.UI
             errorPrimary = Root.Q<Button>("error-primary");
             errorSecondary = Root.Q<Button>("error-secondary");
             toast = Root.Q<Label>("toast");
+            backdrop = Root.Q("editor-backdrop");
 
             spinners.Add(Root.Q("checking-spinner"));
             spinners.Add(Root.Q("localizing-spinner"));
@@ -85,6 +89,7 @@ namespace ThreeTimes.UI
                 SetVisible(pair.Value, pair.Key == state);
             foreach (var overlay in overlays)
                 SetVisible(overlay, false);
+            SetVisible(backdrop, Simulated && (state == AppState.Localizing || state == AppState.Main));
         }
 
         public void SetCheckingStatus(string text) => checkingStatus.text = text;
@@ -152,7 +157,7 @@ namespace ThreeTimes.UI
             float right = Mathf.Max(0f, lastPanelSize.x - bottomRight.x);
             float bottom = Mathf.Max(0f, lastPanelSize.y - bottomRight.y);
 
-            Root.Query(className: "screen").ForEach(screen =>
+            Root.Query(className: "safe").ForEach(screen =>
             {
                 screen.style.paddingLeft = basePadding + left;
                 screen.style.paddingTop = basePadding + top;
