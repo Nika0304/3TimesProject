@@ -32,8 +32,13 @@ namespace ThreeTimes.UI
         public event Action CreateCapsuleRequested;
         public event Action MapRequested;
         public event Action PostcardRequested;
+        public event Action CameraRequested;
+        public event Action CameraOffRequested;
 
-        VisualElement screenMain, screenMenu, screenAbout, pastTint;
+        public bool CameraOn { get; private set; }
+
+        VisualElement screenMain, screenMenu, screenAbout, pastTint, cameraPrompt;
+        Button cameraOff;
         VisualElement statusDot;
         Label statusLabel, modeLabel, modeWord, modeHint;
         Button actionPrimary;
@@ -41,7 +46,8 @@ namespace ThreeTimes.UI
         Button labelPast, labelPresent, labelFuture;
 
         bool dragging;
-        bool initialized;
+        // Nu se serializează: după o recompilare în Play, Init() trebuie să ruleze din nou.
+        [System.NonSerialized] bool initialized;
 
         struct ModeLook
         {
@@ -90,6 +96,10 @@ namespace ThreeTimes.UI
             screenMenu = root.Q("screen-menu");
             screenAbout = root.Q("screen-about");
             pastTint = root.Q("past-tint");
+            cameraPrompt = root.Q("camera-prompt");
+            cameraOff = root.Q<Button>("camera-off");
+            root.Q<Button>("camera-start").clicked += () => CameraRequested?.Invoke();
+            cameraOff.clicked += () => CameraOffRequested?.Invoke();
 
             statusDot = root.Q("status-dot");
             statusLabel = root.Q<Label>("status-label");
@@ -144,9 +154,29 @@ namespace ThreeTimes.UI
 
         // ---------------------------------------------------------------- stare localizare
 
+        /// <summary>Comută ecranul între „fundal + Pornește camera” și vederea prin cameră.</summary>
+        public void SetCameraOn(bool on)
+        {
+            CameraOn = on;
+            UIRouter.SetVisible(cameraPrompt, !on);
+            UIRouter.SetVisible(cameraOff, on);
+            UIRouter.SetVisible(modeHint, on);
+            actionPrimary.EnableInClassList("btn--muted", !on);
+            UpdateStatus();
+        }
+
         void UpdateStatus()
         {
             if (tracker == null || !IsVisible(screenMain)) return;
+
+            if (!CameraOn)
+            {
+                statusDot.EnableInClassList("dot--good", false);
+                statusDot.EnableInClassList("dot--low", false);
+                statusDot.EnableInClassList("dot--none", true);
+                statusLabel.text = "Camera e oprită";
+                return;
+            }
 
             var fix = tracker.Fix;
             string accuracy = fix.HasValue ? $", ±{fix.Value.HorizontalAccuracy:0} m" : "";
@@ -170,6 +200,7 @@ namespace ThreeTimes.UI
             switch (Mode)
             {
                 case TimeMode.Present:
+                    if (!CameraOn) { router.Toast("Pornește camera ca să lași o urmă exact aici."); break; }
                     Raise(LeaveTraceRequested, "„Lasă o urmă” urmează în pasul 4.");
                     break;
                 case TimeMode.Past:
@@ -258,10 +289,21 @@ namespace ThreeTimes.UI
             knob.EnableInClassList("knob--present", m == TimeMode.Present);
             knob.EnableInClassList("knob--future", m == TimeMode.Future);
 
-            modeLabel.text = look.Label;
-            modeLabel.EnableInClassList("mode-label--past", m == TimeMode.Past);
-            modeLabel.EnableInClassList("mode-label--future", m == TimeMode.Future);
-            modeWord.text = look.Word;
+            // Cuvântul mare („acum”, „1989”, „2030”) iese, se schimbă și intră din nou.
+            if (modeWord.text != look.Word)
+            {
+                modeWord.AddToClassList("word-out");
+                modeLabel.AddToClassList("word-out");
+                modeWord.schedule.Execute(() =>
+                {
+                    modeLabel.text = look.Label;
+                    modeLabel.EnableInClassList("mode-label--past", m == TimeMode.Past);
+                    modeLabel.EnableInClassList("mode-label--future", m == TimeMode.Future);
+                    modeWord.text = look.Word;
+                    modeWord.RemoveFromClassList("word-out");
+                    modeLabel.RemoveFromClassList("word-out");
+                }).StartingIn(180);
+            }
             modeHint.text = look.Hint;
             actionPrimary.text = look.Primary;
 

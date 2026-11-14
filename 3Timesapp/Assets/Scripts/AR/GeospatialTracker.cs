@@ -66,6 +66,13 @@ namespace ThreeTimes.AR
             SetQuality(LocalizationQuality.None);
         }
 
+        public void Stop()
+        {
+            Running = false;
+            Fix = null;
+            SetQuality(LocalizationQuality.None);
+        }
+
         public FeatureSupported GeospatialSupport =>
             Simulated ? FeatureSupported.Supported
                       : earthManager.IsGeospatialModeSupported(GeospatialMode.Enabled);

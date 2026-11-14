@@ -63,10 +63,13 @@ namespace ThreeTimes.Core
             ui.OnboardingContinue += () => continueRequested = true;
             ui.LocalizingRetry += () => retryRequested = true;
             ui.LocalizingContinue += () => continueRequested = true;
+            ui.LocalizingCancel += StopCamera;
             ui.ErrorPrimary += OnErrorPrimary;
-            ui.ErrorSecondary += Restart;
+            ui.ErrorSecondary += StopCamera;
+            mainView.CameraRequested += StartCamera;
+            mainView.CameraOffRequested += StopCamera;
 
-            flow = StartCoroutine(Startup(showSplash: true));
+            flow = StartCoroutine(Startup());
         }
 
         void OnApplicationFocus(bool focused)
@@ -75,31 +78,32 @@ namespace ThreeTimes.Core
             if (focused && waitingForSettings && State == AppState.Error)
             {
                 waitingForSettings = false;
-                Restart();
+                StartCamera();
             }
         }
 
         // ---------------------------------------------------------------- fluxul
 
-        IEnumerator Startup(bool showSplash)
+        /// <summary>Deschiderea aplicației: splash, ecranul de pornire, apoi ecranul principal cu camera oprită.</summary>
+        IEnumerator Startup()
         {
-            if (showSplash)
-            {
-                Go(AppState.Splash);
-                yield return new WaitForSecondsRealtime(splashSeconds);
-            }
+            Go(AppState.Splash);
+            float splashDuration = ui.PlaySplash();
+            yield return new WaitForSecondsRealtime(Mathf.Max(splashSeconds, splashDuration));
 
-            // 1. Ecranul de pornire apare la fiecare deschidere; „Începe” duce mai departe.
-            //    La o reîncercare după o eroare nu-l mai arătăm.
-            if (showSplash)
-            {
-                Go(AppState.Onboarding);
-                continueRequested = false;
-                yield return new WaitUntil(() => continueRequested);
-                AppPrefs.OnboardingSeen = true;
-            }
+            Go(AppState.Onboarding);
+            ui.PlayOnboardingIntro();
+            continueRequested = false;
+            yield return new WaitUntil(() => continueRequested);
+            AppPrefs.OnboardingSeen = true;
 
-            // Permisiunile se cer doar dacă lipsesc.
+            GoMain(cameraOn: false);
+        }
+
+        /// <summary>„Pornește camera”: permisiuni, verificări, sesiunea AR și localizarea.</summary>
+        IEnumerator CameraFlow()
+        {
+            // 1. Permisiunile se cer abia acum, și doar dacă lipsesc.
             if (!PermissionService.HasAll())
             {
                 bool granted = false;
@@ -130,8 +134,8 @@ namespace ThreeTimes.Core
                 yield return new WaitForSecondsRealtime(0.6f);
             }
 
-            // 3. Pornim sesiunea AR
-            if (arRoot != null) arRoot.SetActive(true);
+            // 3. Pornim sesiunea AR (în Editor nu există ARCore, deci rămâne oprită în simulare)
+            if (arRoot != null && !Simulated) arRoot.SetActive(true);
             tracker.Begin(Simulated);
 
             if (!Simulated)
@@ -220,7 +224,7 @@ namespace ThreeTimes.Core
 
             float seconds = Time.realtimeSinceStartup - started;
             Debug.Log($"[3Times] Localizat în {seconds:F1} s, calitate {tracker.Quality}");
-            Go(AppState.Main);
+            GoMain(cameraOn: true);
         }
 
         // ---------------------------------------------------------------- ajutătoare
@@ -262,7 +266,7 @@ namespace ThreeTimes.Core
 
         void OnErrorPrimary()
         {
-            if (!currentError.HasValue) { Restart(); return; }
+            if (!currentError.HasValue) { StartCamera(); return; }
 
             switch (AppErrors.Describe(currentError.Value).PrimaryAction)
             {
@@ -275,15 +279,34 @@ namespace ThreeTimes.Core
                     AndroidIntents.OpenLocationSettings();
                     break;
                 default:
-                    Restart();
+                    StartCamera();
                     break;
             }
         }
 
-        void Restart()
+        void StartCamera()
         {
             if (flow != null) StopCoroutine(flow);
-            flow = StartCoroutine(Startup(showSplash: false));
+            flow = StartCoroutine(CameraFlow());
+        }
+
+        /// <summary>Oprește camera și localizarea și revine la ecranul principal cu fundal.</summary>
+        void StopCamera()
+        {
+            if (flow != null) StopCoroutine(flow);
+            flow = null;
+            waitingForSettings = false;
+            if (arRoot != null) arRoot.SetActive(false);
+            tracker.Stop();
+            if (!Simulated) DeviceLocation.Stop();
+            GoMain(cameraOn: false);
+        }
+
+        void GoMain(bool cameraOn)
+        {
+            mainView.SetCameraOn(cameraOn);
+            ui.CameraOn = cameraOn;
+            Go(AppState.Main);
         }
 
         [ContextMenu("Resetează onboarding-ul")]

@@ -47,3 +47,6 @@ ExportedObj/
 *.aab
 *.unitypackage
 *.unitypackage.meta
+
+# Generat la build (informații de depanare Burst)
+/*_BurstDebugInformation_DoNotShip/

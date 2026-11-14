@@ -9,11 +9,20 @@
         <!-- 1. Splash -->
         <ui:VisualElement name="screen-splash" class="screen screen--paper">
             <ui:VisualElement class="safe center">
-                <ui:VisualElement class="logo logo--big">
+                <ui:VisualElement name="splash-logo" class="logo logo--big intro intro--scale">
                     <ui:Label text="3" class="logo__three" />
                     <ui:Label text="Times" class="logo__times" />
                 </ui:VisualElement>
-                <ui:Label text="Un loc. Trei timpuri." class="splash-tagline" />
+                <ui:VisualElement class="splash-taglines">
+                    <ui:Label name="splash-line1" text="Un loc." class="splash-tagline intro" />
+                    <ui:Label name="splash-line2" text="Trei timpuri." class="splash-tagline intro" />
+                </ui:VisualElement>
+                <ui:VisualElement class="splash-slider">
+                    <ui:VisualElement name="splash-track" class="splash-track splash-track--hidden" />
+                    <ui:VisualElement name="splash-knob" class="time-knob splash-knob knob--past fade-hidden">
+                        <ui:VisualElement class="knob-core" />
+                    </ui:VisualElement>
+                </ui:VisualElement>
             </ui:VisualElement>
         </ui:VisualElement>
 
@@ -32,21 +41,21 @@
                 <ui:Label text="Un loc.&#10;Trei timpuri." class="display" />
                 <ui:Label text="Ridică telefonul spre Piața Victoriei și trage cursorul timpului." class="lead" />
                 <ui:VisualElement class="modes-card">
-                    <ui:VisualElement class="mode-row">
+                    <ui:VisualElement name="intro-past" class="mode-row intro">
                         <ui:VisualElement class="mode-icon mode-icon--past"><ui:VisualElement class="icon icon--past" /></ui:VisualElement>
                         <ui:VisualElement class="mode-text">
                             <ui:Label text="Trecut" class="mode-title mode-title--past" />
                             <ui:Label text="Vezi cum arăta piața acum un secol." class="mode-desc" />
                         </ui:VisualElement>
                     </ui:VisualElement>
-                    <ui:VisualElement class="mode-row">
+                    <ui:VisualElement name="intro-present" class="mode-row intro">
                         <ui:VisualElement class="mode-icon mode-icon--present"><ui:VisualElement class="icon icon--present" /></ui:VisualElement>
                         <ui:VisualElement class="mode-text">
                             <ui:Label text="Prezent" class="mode-title mode-title--present" />
                             <ui:Label text="Descoperă ce au simțit alții aici și lasă-ți propria urmă." class="mode-desc" />
                         </ui:VisualElement>
                     </ui:VisualElement>
-                    <ui:VisualElement class="mode-row mode-row--last">
+                    <ui:VisualElement name="intro-future" class="mode-row mode-row--last intro">
                         <ui:VisualElement class="mode-icon mode-icon--future"><ui:VisualElement class="icon icon--future" /></ui:VisualElement>
                         <ui:VisualElement class="mode-text">
                             <ui:Label text="Viitor" class="mode-title mode-title--future" />
@@ -55,8 +64,8 @@
                     </ui:VisualElement>
                 </ui:VisualElement>
                 <ui:VisualElement class="grow" />
-                <ui:Button name="onboarding-continue" text="Începe" class="btn btn--primary" />
-                <ui:Label text="Îți vom cere acces la cameră și la locație." class="fineprint" />
+                <ui:Button name="onboarding-continue" text="Începe" class="btn btn--primary intro" />
+                <ui:Label text="Camera o pornești doar când vrei tu." class="fineprint" />
             </ui:VisualElement>
         </ui:VisualElement>
 
@@ -86,6 +95,7 @@
                             <ui:Button name="localizing-continue" text="Continuă oricum" class="btn btn--primary grow gap-left" />
                         </ui:VisualElement>
                     </ui:VisualElement>
+                    <ui:Button name="localizing-cancel" text="Închide camera" class="btn btn--ghost" />
                 </ui:VisualElement>
             </ui:VisualElement>
         </ui:VisualElement>
@@ -114,12 +124,17 @@
                         <ui:Label text="3" class="logo__three" picking-mode="Ignore" />
                         <ui:Label text="Times" class="logo__times" picking-mode="Ignore" />
                     </ui:VisualElement>
-                    <ui:Button name="menu-button" class="round-btn">
-                        <ui:VisualElement class="menu-bars" picking-mode="Ignore">
-                            <ui:VisualElement class="bar" picking-mode="Ignore" />
-                            <ui:VisualElement class="bar bar--short" picking-mode="Ignore" />
-                        </ui:VisualElement>
-                    </ui:Button>
+                    <ui:VisualElement class="row" picking-mode="Ignore">
+                        <ui:Button name="camera-off" class="round-btn hidden">
+                            <ui:VisualElement class="icon icon--camera-off" picking-mode="Ignore" />
+                        </ui:Button>
+                        <ui:Button name="menu-button" class="round-btn gap-left">
+                            <ui:VisualElement class="menu-bars" picking-mode="Ignore">
+                                <ui:VisualElement class="bar" picking-mode="Ignore" />
+                                <ui:VisualElement class="bar bar--short" picking-mode="Ignore" />
+                            </ui:VisualElement>
+                        </ui:Button>
+                    </ui:VisualElement>
                 </ui:VisualElement>
 
                 <ui:VisualElement class="mode-head" picking-mode="Ignore">
@@ -134,7 +149,17 @@
                 <!-- aici, deasupra, se văd camera și urmele în AR -->
                 <ui:VisualElement class="grow" picking-mode="Ignore" />
 
-                <ui:Label name="mode-hint" text="Atinge o urmă ca s-o deschizi." class="hint" picking-mode="Ignore" />
+                <!-- Camera oprită: invitație să pornești camera -->
+                <ui:VisualElement name="camera-prompt" class="camera-card">
+                    <ui:Label text="Vezi timpul prin cameră" class="title" />
+                    <ui:Label name="camera-prompt-text" text="Urmele și capsulele apar peste locul în care ești." class="caption camera-card__text" />
+                    <ui:Button name="camera-start" class="btn btn--primary camera-card__btn">
+                        <ui:VisualElement class="icon icon--camera" picking-mode="Ignore" />
+                        <ui:Label text="Pornește camera" class="btn__label" picking-mode="Ignore" />
+                    </ui:Button>
+                </ui:VisualElement>
+
+                <ui:Label name="mode-hint" text="Atinge o urmă ca s-o deschizi." class="hint hidden" picking-mode="Ignore" />
 
                 <ui:VisualElement class="actions">
                     <ui:Button name="action-map" class="round-btn round-btn--big">
