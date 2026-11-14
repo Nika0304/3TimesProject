@@ -1,45 +1,37 @@
-using System;
-using System.Collections;
 using UnityEngine;
 
 namespace ThreeTimes.AR
 {
     /// <summary>
-    /// GPS-ul telefonului. Îl folosim doar ca să aflăm aproximativ unde suntem
-    /// (pentru verificarea acoperirii VPS). Poziția precisă vine din Geospatial.
+    /// Verifică dacă locația telefonului (GPS) e pornită din setări.
+    /// Poziția propriu-zisă vine din ARCore Geospatial, nu de aici.
     /// </summary>
     public static class DeviceLocation
     {
-        public static bool IsRunning => Input.location.status == LocationServiceStatus.Running;
-
-        public static IEnumerator StartService(float timeoutSeconds, Action<bool> onDone)
+        public static bool IsEnabled
         {
-            if (!Input.location.isEnabledByUser)
+            get
             {
-                onDone?.Invoke(false);
-                yield break;
-            }
-
-            if (!IsRunning)
-            {
-                Input.location.Start(5f, 1f);
-                float elapsed = 0f;
-                while (!IsRunning &&
-                       Input.location.status != LocationServiceStatus.Failed &&
-                       elapsed < timeoutSeconds)
+#if UNITY_ANDROID && !UNITY_EDITOR
+                try
                 {
-                    elapsed += Time.unscaledDeltaTime;
-                    yield return null;
+                    using (var unityPlayer = new AndroidJavaClass("com.unity3d.player.UnityPlayer"))
+                    using (var activity = unityPlayer.GetStatic<AndroidJavaObject>("currentActivity"))
+                    using (var manager = activity.Call<AndroidJavaObject>("getSystemService", "location"))
+                    {
+                        return manager.Call<bool>("isProviderEnabled", "gps")
+                            || manager.Call<bool>("isProviderEnabled", "network");
+                    }
                 }
+                catch (System.Exception e)
+                {
+                    Debug.LogWarning($"[3Times] Nu am putut verifica locația: {e.Message}");
+                    return true; // nu blocăm aplicația; ARCore va raporta dacă lipsește locația
+                }
+#else
+                return true;
+#endif
             }
-
-            onDone?.Invoke(IsRunning);
-        }
-
-        public static void Stop()
-        {
-            if (Input.location.status != LocationServiceStatus.Stopped)
-                Input.location.Stop();
         }
     }
 }

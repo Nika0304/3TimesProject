@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.InputSystem;
 using UnityEngine.UIElements;
 using ThreeTimes.AR;
 using ThreeTimes.Core;
@@ -26,18 +28,26 @@ namespace ThreeTimes.UI
         /// <summary>Se declanșează când utilizatorul schimbă modul de pe cursor.</summary>
         public event Action<TimeMode> ModeChanged;
 
-        // Acțiunile ecranului. Pașii următori se abonează aici (de ex. „Lasă o urmă”, pasul 4).
-        public event Action LeaveTraceRequested;
+        // Acțiunile ecranului. Celelalte componente se abonează aici.
+        /// <summary>Utilizatorul a completat și a confirmat o urmă nouă.</summary>
+        public event Action<TraceDraft> TraceSubmitted;
         public event Action GuideRequested;
         public event Action CreateCapsuleRequested;
         public event Action MapRequested;
         public event Action PostcardRequested;
         public event Action CameraRequested;
         public event Action CameraOffRequested;
+        public event Action ClearTracesRequested;
+        /// <summary>Atingere în zona liberă a ecranului, în coordonate de ecran (pentru urmele din AR).</summary>
+        public event Action<Vector2> WorldTapped;
+        public event Action<ThreeTimes.Data.SavedTrace> TraceReportRequested;
+        public event Action<ThreeTimes.Data.SavedTrace> TraceDeleteRequested;
 
         public bool CameraOn { get; private set; }
 
-        VisualElement screenMain, screenMenu, screenAbout, pastTint, cameraPrompt;
+        VisualElement screenLog;
+        Label logText;
+        VisualElement screenMain, screenMenu, screenAbout, pastTint, cameraPrompt, simTraces;
         Button cameraOff;
         VisualElement statusDot;
         Label statusLabel, modeLabel, modeWord, modeHint;
@@ -45,6 +55,9 @@ namespace ThreeTimes.UI
         VisualElement slider, track, knob;
         Button labelPast, labelPresent, labelFuture;
 
+        TraceSheetView traceSheet;
+        TraceDetailView traceDetail;
+        int traceCount;
         bool dragging;
         // Nu se serializează: după o recompilare în Play, Init() trebuie să ruleze din nou.
         [System.NonSerialized] bool initialized;
@@ -97,6 +110,7 @@ namespace ThreeTimes.UI
             screenAbout = root.Q("screen-about");
             pastTint = root.Q("past-tint");
             cameraPrompt = root.Q("camera-prompt");
+            simTraces = root.Q("sim-traces");
             cameraOff = root.Q<Button>("camera-off");
             root.Q<Button>("camera-start").clicked += () => CameraRequested?.Invoke();
             cameraOff.clicked += () => CameraOffRequested?.Invoke();
@@ -120,6 +134,52 @@ namespace ThreeTimes.UI
             root.Q<Button>("menu-close").clicked += CloseMenu;
             root.Q<Button>("menu-account").clicked += () => router.Toast("Contul (opțional) vine într-o etapă următoare.");
             root.Q<Button>("menu-about").clicked += OpenAbout;
+            // Jurnalul de test
+            screenLog = root.Q("screen-log");
+            logText = root.Q<Label>("log-text");
+            root.Q<Button>("menu-log").clicked += () =>
+            {
+                logText.text = ThreeTimes.Data.TestLog.Text();
+                UIRouter.SetVisible(screenLog, true);
+            };
+            root.Q<Button>("log-back").clicked += () => UIRouter.SetVisible(screenLog, false);
+            root.Q<Button>("log-copy").clicked += () =>
+            {
+                GUIUtility.systemCopyBuffer = ThreeTimes.Data.TestLog.Text();
+                router.Toast("Jurnalul a fost copiat. Îl poți lipi într-un mesaj sau într-un document.");
+            };
+            root.Q<Button>("log-clear").clicked += () =>
+            {
+                ThreeTimes.Data.TestLog.Clear();
+                logText.text = ThreeTimes.Data.TestLog.Text();
+            };
+
+            root.Q<Button>("menu-clear-traces").clicked += () =>
+            {
+                CloseMenu();
+                Raise(ClearTracesRequested, "Nu ai urme de test.");
+            };
+
+            traceDetail = new TraceDetailView(root, router);
+            traceDetail.ReportRequested += t => TraceReportRequested?.Invoke(t);
+            traceDetail.DeleteRequested += t => TraceDeleteRequested?.Invoke(t);
+
+            // Atingerile din zona liberă: le trimitem mai departe în coordonate de ecran (origine jos-stânga).
+            root.Q("tap-catcher").RegisterCallback<ClickEvent>(evt =>
+            {
+                if (!CameraOn || Mode != TimeMode.Present) return;
+                float width = root.layout.width;
+                if (float.IsNaN(width) || width <= 0f) return;
+                float scale = Screen.width / width;
+                WorldTapped?.Invoke(new Vector2(evt.position.x * scale, Screen.height - evt.position.y * scale));
+            });
+
+            traceSheet = new TraceSheetView(root, router);
+            traceSheet.Submitted += draft =>
+            {
+                if (TraceSubmitted != null) TraceSubmitted.Invoke(draft);
+                else router.Toast("Urmele nu sunt încă legate în scenă: rulează Tools → 3Times → 3.");
+            };
             root.Q<Button>("about-back").clicked += CloseAbout;
             root.Q<Button>("onboarding-lang").clicked += () => router.Toast("Versiunea în engleză vine mai târziu.");
 
@@ -146,8 +206,13 @@ namespace ThreeTimes.UI
         void Update()
         {
             // Butonul „Înapoi” de pe Android
-            if (!initialized || !Input.GetKeyDown(KeyCode.Escape)) return;
-            if (IsVisible(screenAbout)) CloseAbout();
+            // (în Input System, „Înapoi” de pe Android e tasta Escape)
+            var keyboard = Keyboard.current;
+            if (!initialized || keyboard == null || !keyboard.escapeKey.wasPressedThisFrame) return;
+            if (traceDetail.IsOpen) traceDetail.Close();
+            else if (traceSheet.IsOpen) traceSheet.Close();
+            else if (IsVisible(screenLog)) UIRouter.SetVisible(screenLog, false);
+            else if (IsVisible(screenAbout)) CloseAbout();
             else if (IsVisible(screenMenu)) CloseMenu();
             else if (Mode != TimeMode.Present) Select(TimeMode.Present);
         }
@@ -162,8 +227,69 @@ namespace ThreeTimes.UI
             UIRouter.SetVisible(cameraOff, on);
             UIRouter.SetVisible(modeHint, on);
             actionPrimary.EnableInClassList("btn--muted", !on);
+            UpdateSimTracesVisibility();
             UpdateStatus();
         }
+
+        /// <summary>Câte urme sunt salvate; schimbă mesajul de sub cameră în modul Prezent.</summary>
+        public void SetTraceCount(int count)
+        {
+            traceCount = count;
+            if (initialized && Mode == TimeMode.Present) modeHint.text = PresentHint();
+        }
+
+        /// <summary>Deschide „ecranul unei urme”.</summary>
+        public void OpenTrace(ThreeTimes.Data.SavedTrace trace) => traceDetail.Open(trace);
+
+        /// <summary>
+        /// Doar în simulare (Editor): desenează urmele salvate peste ilustrația pieței,
+        /// ca să vedem cum arată fără telefon. Pe telefon urmele apar în AR.
+        /// </summary>
+        public void ShowSimulatedTraces(IList<ThreeTimes.Data.SavedTrace> traces)
+        {
+            simTraces.Clear();
+            foreach (var t in traces)
+            {
+                // Poziție stabilă, calculată din id: aceeași urmă apare mereu în același loc.
+                int hash = 17;
+                foreach (char c in t.id) hash = unchecked(hash * 31 + c);
+                float x = 12 + Mathf.Abs(hash % 76);          // 12–88 % din lățime
+                float y = 32 + Mathf.Abs((hash / 97) % 26);   // 32–58 % din înălțime
+
+                int level = TraceLook.Level(t.intensity);
+                string key = TraceLook.Key(t.emotion);
+                float size = 44 + level * 22;
+
+                var item = new VisualElement();
+                item.AddToClassList("sim-trace");
+                var trace = t; // copie pentru lambda
+                item.RegisterCallback<ClickEvent>(_ => OpenTrace(trace));
+                item.style.left = Length.Percent(x);
+                item.style.top = Length.Percent(y);
+
+                var shape = new VisualElement { pickingMode = PickingMode.Ignore };
+                shape.AddToClassList("sim-trace__shape");
+                shape.AddToClassList($"shape--{key}-{level}");
+                shape.style.width = size;
+                shape.style.height = size;
+                item.Add(shape);
+
+                var label = new Label(TraceLook.Name(t.emotion)) { pickingMode = PickingMode.Ignore };
+                label.AddToClassList("sim-trace__label");
+                item.Add(label);
+
+                simTraces.Add(item);
+            }
+            UpdateSimTracesVisibility();
+        }
+
+        void UpdateSimTracesVisibility() =>
+            UIRouter.SetVisible(simTraces, CameraOn && Mode == TimeMode.Present && simTraces.childCount > 0);
+
+        string PresentHint() =>
+            traceCount == 0 ? "Nicio urmă aici încă. Lasă tu prima." :
+            traceCount == 1 ? "O urmă lăsată de tine." :
+            $"{traceCount} urme lăsate de tine.";
 
         void UpdateStatus()
         {
@@ -201,7 +327,12 @@ namespace ThreeTimes.UI
             {
                 case TimeMode.Present:
                     if (!CameraOn) { router.Toast("Pornește camera ca să lași o urmă exact aici."); break; }
-                    Raise(LeaveTraceRequested, "„Lasă o urmă” urmează în pasul 4.");
+                    if (tracker != null && tracker.Quality != LocalizationQuality.Good)
+                    {
+                        router.Toast("Localizarea nu e încă destul de precisă. Îndreaptă telefonul spre clădiri.");
+                        break;
+                    }
+                    traceSheet.Open();
                     break;
                 case TimeMode.Past:
                     Raise(pastReady ? GuideRequested : null, "Ghidul vocal și fațadele vin în etapa următoare.");
@@ -304,7 +435,7 @@ namespace ThreeTimes.UI
                     modeLabel.RemoveFromClassList("word-out");
                 }).StartingIn(180);
             }
-            modeHint.text = look.Hint;
+            modeHint.text = m == TimeMode.Present ? PresentHint() : look.Hint;
             actionPrimary.text = look.Primary;
 
             labelPast.EnableInClassList("time-label--past-active", m == TimeMode.Past);
@@ -312,6 +443,7 @@ namespace ThreeTimes.UI
             labelFuture.EnableInClassList("time-label--future-active", m == TimeMode.Future);
 
             UIRouter.SetVisible(pastTint, m == TimeMode.Past);
+            UpdateSimTracesVisibility();
         }
     }
 }

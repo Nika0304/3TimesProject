@@ -3,6 +3,7 @@ using UnityEngine;
 using UnityEngine.XR.ARFoundation;
 using Google.XR.ARCoreExtensions;
 using ThreeTimes.AR;
+using ThreeTimes.Data;
 using ThreeTimes.Platform;
 using ThreeTimes.UI;
 
@@ -24,7 +25,6 @@ namespace ThreeTimes.Core
 
         [Header("Timpi (secunde)")]
         [SerializeField] float splashSeconds = 1f;
-        [SerializeField] float locationTimeout = 15f;
         [SerializeField] float vpsTimeout = 10f;
         [SerializeField] float geospatialSupportTimeout = 15f;
         [Tooltip("După cât timp de căutare apar butoanele „Mai încerc” și „Continuă oricum”.")]
@@ -43,7 +43,8 @@ namespace ThreeTimes.Core
         Coroutine flow;
         bool continueRequested;
         bool retryRequested;
-        bool vpsUnavailable;
+        bool vpsChecked;
+        VpsAvailability? vpsResult;
         AppErrorKind? currentError;
         bool waitingForSettings;
 
@@ -52,6 +53,16 @@ namespace ThreeTimes.Core
             Application.targetFrameRate = 60;
             Screen.sleepTimeout = SleepTimeout.NeverSleep;
             if (arRoot != null) arRoot.SetActive(false);
+
+            // În simulare nu pornește camera AR. Punem o cameră simplă, ca Game view
+            // să nu afișeze „No cameras rendering” peste interfață.
+            if (Simulated)
+            {
+                var editorCamera = new GameObject("Editor Camera").AddComponent<Camera>();
+                editorCamera.clearFlags = CameraClearFlags.SolidColor;
+                editorCamera.backgroundColor = new Color(0.957f, 0.961f, 0.984f);
+                editorCamera.cullingMask = 0;
+            }
         }
 
         void Start()
@@ -103,6 +114,8 @@ namespace ThreeTimes.Core
         /// <summary>„Pornește camera”: permisiuni, verificări, sesiunea AR și localizarea.</summary>
         IEnumerator CameraFlow()
         {
+            TestLog.Add(Simulated ? "Camera pornită (simulare în Editor)" : "Camera pornită");
+
             // 1. Permisiunile se cer abia acum, și doar dacă lipsesc.
             if (!PermissionService.HasAll())
             {
@@ -123,10 +136,8 @@ namespace ThreeTimes.Core
                 yield return ArSupportChecker.CheckArCore(e => arError = e);
                 if (arError.HasValue) { Fail(arError.Value); yield break; }
 
-                ui.SetCheckingStatus("Pornim locația…");
-                bool locationOk = false;
-                yield return DeviceLocation.StartService(locationTimeout, ok => locationOk = ok);
-                if (!locationOk) { Fail(AppErrorKind.LocationOff); yield break; }
+                ui.SetCheckingStatus("Verificăm locația…");
+                if (!DeviceLocation.IsEnabled) { Fail(AppErrorKind.LocationOff); yield break; }
             }
             else
             {
@@ -140,14 +151,6 @@ namespace ThreeTimes.Core
 
             if (!Simulated)
             {
-                ui.SetCheckingStatus("Verificăm acoperirea zonei…");
-                var gps = Input.location.lastData;
-                VpsAvailability? vps = null;
-                yield return VpsChecker.Check(gps.latitude, gps.longitude, vpsTimeout, r => vps = r);
-                if (vps == VpsAvailability.ErrorNotAuthorized) { Fail(AppErrorKind.NotAuthorized); yield break; }
-                if (vps == VpsAvailability.ErrorNetworkConnection) { Fail(AppErrorKind.NoInternet); yield break; }
-                vpsUnavailable = vps == VpsAvailability.Unavailable;
-
                 ui.SetCheckingStatus("Pregătim camera…");
                 float elapsed = 0f;
                 while (tracker.GeospatialSupport == FeatureSupported.Unknown && elapsed < geospatialSupportTimeout)
@@ -167,8 +170,8 @@ namespace ThreeTimes.Core
         IEnumerator Localize()
         {
             Go(AppState.Localizing);
-            if (vpsUnavailable)
-                ui.Toast("Zona nu are acoperire VPS: localizarea se bazează pe GPS și poate fi mai puțin precisă.", 5f);
+            vpsChecked = false;
+            vpsResult = null;
 
             float started = Time.realtimeSinceStartup;
             float goodSince = -1f;
@@ -192,6 +195,23 @@ namespace ThreeTimes.Core
                 }
 
                 ui.SetLocalizingAccuracy(tracker.Fix);
+
+                // Acoperirea VPS o verificăm o singură dată, cu prima poziție primită de la Geospatial.
+                if (!Simulated && !vpsChecked && tracker.Fix.HasValue)
+                {
+                    vpsChecked = true;
+                    var fix = tracker.Fix.Value;
+                    StartCoroutine(VpsChecker.Check(fix.Latitude, fix.Longitude, vpsTimeout, r => vpsResult = r));
+                }
+                if (vpsResult.HasValue)
+                {
+                    var vps = vpsResult.Value;
+                    vpsResult = null;
+                    TestLog.Add($"Acoperire VPS aici: {(vps == VpsAvailability.Available ? "da" : vps == VpsAvailability.Unavailable ? "nu" : vps.ToString())}");
+                    if (vps == VpsAvailability.ErrorNotAuthorized) { Fail(AppErrorKind.NotAuthorized); yield break; }
+                    if (vps == VpsAvailability.Unavailable)
+                        ui.Toast("Zona nu are acoperire VPS: localizarea se bazează pe GPS și poate fi mai puțin precisă.", 5f);
+                }
 
                 if (tracker.Quality == LocalizationQuality.Good)
                 {
@@ -224,6 +244,17 @@ namespace ThreeTimes.Core
 
             float seconds = Time.realtimeSinceStartup - started;
             Debug.Log($"[3Times] Localizat în {seconds:F1} s, calitate {tracker.Quality}");
+            if (tracker.Fix.HasValue)
+            {
+                var f = tracker.Fix.Value;
+                string result = tracker.Quality == LocalizationQuality.Good ? "Localizat" : "Continuat cu precizie scăzută";
+                TestLog.Add($"{result} după {seconds:0.0} s · ±{f.HorizontalAccuracy:0.0} m · ±{f.YawAccuracy:0}° · " +
+                            $"{f.Latitude:F6}, {f.Longitude:F6}");
+            }
+            else
+            {
+                TestLog.Add($"Continuat fără poziție după {seconds:0.0} s");
+            }
             GoMain(cameraOn: true);
         }
 
@@ -259,6 +290,7 @@ namespace ThreeTimes.Core
         void Fail(AppErrorKind kind)
         {
             Debug.LogWarning($"[3Times] Eroare: {kind}");
+            TestLog.Add($"Eroare: {kind}");
             currentError = kind;
             ui.ShowError(AppErrors.Describe(kind));
             Go(AppState.Error);
@@ -298,7 +330,6 @@ namespace ThreeTimes.Core
             waitingForSettings = false;
             if (arRoot != null) arRoot.SetActive(false);
             tracker.Stop();
-            if (!Simulated) DeviceLocation.Stop();
             GoMain(cameraOn: false);
         }
 

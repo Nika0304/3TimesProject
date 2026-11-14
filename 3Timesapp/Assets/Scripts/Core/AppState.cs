@@ -31,4 +31,21 @@ namespace ThreeTimes.Core
         NotAuthorized,
         LocalizationServiceError
     }
+
+    /// <summary>Emoțiile unei urme (prima versiune: trei).</summary>
+    public enum Emotion
+    {
+        Joy,
+        Sadness,
+        Longing
+    }
+
+    /// <summary>Ce completează utilizatorul pe ecranul „Lasă o urmă”.</summary>
+    public struct TraceDraft
+    {
+        public string Text;
+        public Emotion Emotion;
+        /// <summary>0 = încet, 1 = mediu, 2 = puternic.</summary>
+        public int Intensity;
+    }
 }

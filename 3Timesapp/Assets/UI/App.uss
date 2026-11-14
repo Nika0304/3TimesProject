@@ -27,6 +27,8 @@
     --low: #F2B33D;
     --none: #B8B5C9;
     --lilac: #9C78E3;
+    --peach-soft: #FFF3EC;
+    --peach-line: #FAE0D4;
 }
 
 /* ---------- fonturi ---------- */
@@ -553,6 +555,248 @@
 }
 .list-item:active { background-color: var(--bg); }
 .list-item__text { font-size: 16px; color: var(--ink); margin: 0; padding: 0; }
+
+/* ---------- „Lasă o urmă” ---------- */
+
+.sheet-dim,
+.sheet-dim:hover,
+.sheet-dim:active {
+    position: absolute;
+    left: 0; top: 0; right: 0; bottom: 0;
+    margin: 0;
+    border-width: 0;
+    border-radius: 0;
+    background-color: rgba(31, 58, 95, 0.3);
+    opacity: 1;
+    transition-property: opacity;
+    transition-duration: 0.5s;
+}
+.sheet-dim--hidden { opacity: 0; }
+
+.trace-sheet {
+    position: absolute;
+    left: 0; right: 0; bottom: 0;
+    height: 88%;
+    background-color: var(--surface);
+    border-top-left-radius: 30px;
+    border-top-right-radius: 30px;
+    padding: 10px 20px 26px 20px;
+    translate: 0 0;
+    transition-property: translate;
+    transition-duration: 0.6s;
+    transition-timing-function: ease-out-cubic;
+}
+.trace-sheet--closed { translate: 0 100%; }
+
+.sheet-handle {
+    align-self: center;
+    width: 40px;
+    height: 5px;
+    border-radius: 3px;
+    background-color: var(--line);
+    margin-bottom: 4px;
+}
+
+.field-label {
+    -unity-font: url("Fonts/Figtree-SemiBold.ttf");
+    -unity-font-definition: initial;
+    font-size: 13px;
+    color: var(--muted);
+    margin: 14px 0 6px 0;
+    padding: 0;
+}
+
+.segments {
+    flex-direction: row;
+    background-color: var(--peach-soft);
+    border-radius: 22px;
+    padding: 4px;
+    margin-top: 10px;
+}
+.seg,
+.seg:hover,
+.seg:active {
+    flex-grow: 1;
+    flex-basis: 0;
+    height: 36px;
+    margin: 0;
+    padding: 0;
+    border-width: 0;
+    border-radius: 18px;
+    background-color: rgba(0, 0, 0, 0);
+    color: var(--muted);
+    font-size: 14px;
+    -unity-font: url("Fonts/Figtree-SemiBold.ttf");
+    -unity-font-definition: initial;
+    -unity-text-align: middle-center;
+}
+.seg--active,
+.seg--active:hover,
+.seg--active:active {
+    background-color: var(--surface);
+    color: var(--ink);
+}
+
+.trace-input {
+    margin: 0;
+    padding: 0;
+    height: 84px;
+}
+.trace-input > .unity-base-text-field__input,
+.trace-input .unity-text-field__input {
+    background-color: var(--peach-soft);
+    border-width: 1px;
+    border-color: var(--peach-line);
+    border-radius: 16px;
+    padding: 10px 14px;
+    color: var(--ink);
+    font-size: 17px;
+    white-space: normal;
+    -unity-font: url("Fonts/Fraunces-Medium.ttf");
+    -unity-font-definition: initial;
+    -unity-text-align: upper-left;
+}
+
+.chips { flex-direction: row; margin: 0 -4px; }
+.chip,
+.chip:hover,
+.chip:active {
+    flex-grow: 1;
+    flex-basis: 0;
+    height: 66px;
+    margin: 0 4px;
+    padding: 0;
+    border-width: 2px;
+    border-color: var(--line);
+    border-radius: 18px;
+    background-color: var(--surface);
+    align-items: center;
+    justify-content: center;
+}
+.chip__icon { width: 30px; height: 30px; -unity-background-scale-mode: scale-to-fit; }
+.chip__label {
+    -unity-font: url("Fonts/Fraunces-Italic.ttf");
+    -unity-font-definition: initial;
+    font-size: 14px;
+    color: var(--ink);
+    margin: 0;
+    padding: 0;
+}
+.chip--joy.chip--active     { background-color: #FFF4D6; border-color: #F5B83D; }
+.chip--sadness.chip--active { background-color: #E5EFFC; border-color: #5B95E6; }
+.chip--longing.chip--active { background-color: #F1EAFF; border-color: #9C78E3; }
+
+.trace-preview {
+    flex-grow: 1;
+    min-height: 90px;
+    margin: 12px 0;
+    border-radius: 20px;
+    background-color: var(--peach-soft);
+    align-items: center;
+    justify-content: center;
+}
+.trace-shape {
+    -unity-background-scale-mode: scale-to-fit;
+    transition-property: width, height;
+    transition-duration: 0.4s;
+    transition-timing-function: ease-out-back;
+}
+.trace-shape--0 { width: 72px;  height: 72px; }
+.trace-shape--1 { width: 100px; height: 100px; }
+.trace-shape--2 { width: 128px; height: 128px; }
+
+.shape--joy-0 { background-image: url("Images/Emotions/joy-0.png"); }
+.shape--joy-1 { background-image: url("Images/Emotions/joy-1.png"); }
+.shape--joy-2 { background-image: url("Images/Emotions/joy-2.png"); }
+.shape--sadness-0 { background-image: url("Images/Emotions/sadness-0.png"); }
+.shape--sadness-1 { background-image: url("Images/Emotions/sadness-1.png"); }
+.shape--sadness-2 { background-image: url("Images/Emotions/sadness-2.png"); }
+.shape--longing-0 { background-image: url("Images/Emotions/longing-0.png"); }
+.shape--longing-1 { background-image: url("Images/Emotions/longing-1.png"); }
+.shape--longing-2 { background-image: url("Images/Emotions/longing-2.png"); }
+
+.suggestion { margin: 8px 0 0 2px; }
+
+/* Urmele desenate peste ilustrație, în simulare */
+.sim-trace { position: absolute; align-items: center; translate: -50% -50%; }
+.sim-trace__shape { -unity-background-scale-mode: scale-to-fit; }
+.sim-trace__label {
+    -unity-font: url("Fonts/Fraunces-Italic.ttf");
+    -unity-font-definition: initial;
+    font-size: 12px;
+    color: var(--ink);
+    background-color: rgba(255, 255, 255, 0.8);
+    border-radius: 9px;
+    padding: 1px 8px;
+    margin: -4px 0 0 0;
+}
+
+/* ---------- jurnalul de test ---------- */
+
+.topbar-spacer { width: 44px; }
+.log-intro { margin: 8px 0 10px 0; }
+.log-scroll {
+    background-color: var(--surface);
+    border-width: 1px;
+    border-color: var(--line);
+    border-radius: 18px;
+    padding: 12px 14px;
+}
+.log-text {
+    font-size: 13px;
+    color: var(--ink);
+    white-space: normal;
+    margin: 0;
+    padding: 0;
+}
+.log-actions { margin-top: 12px; }
+
+/* ---------- ecranul unei urme ---------- */
+
+.detail-card {
+    position: absolute;
+    left: 12px; right: 12px; bottom: 12px;
+    background-color: var(--surface);
+    border-radius: 28px;
+    padding: 22px 22px 12px 22px;
+    opacity: 1;
+    translate: 0 0;
+    transition-property: translate, opacity;
+    transition-duration: 0.45s;
+    transition-timing-function: ease-out-cubic;
+}
+.detail-card--closed { translate: 0 40px; opacity: 0; }
+
+.detail-shape { width: 56px; height: 56px; margin-right: 12px; -unity-background-scale-mode: scale-to-fit; }
+.detail-emotion {
+    -unity-font: url("Fonts/Fraunces-Italic.ttf");
+    -unity-font-definition: initial;
+    font-size: 22px;
+    margin: 0; padding: 0;
+}
+.detail-emotion--joy     { color: #B9780F; }
+.detail-emotion--sadness { color: #3B73C2; }
+.detail-emotion--longing { color: #7454C2; }
+
+.detail-text {
+    -unity-font: url("Fonts/Fraunces-Medium.ttf");
+    -unity-font-definition: initial;
+    font-size: 20px;
+    color: var(--ink);
+    white-space: normal;
+    margin: 14px 0 10px 0;
+    padding: 0;
+}
+.detail-actions { margin-top: 16px; }
+
+.btn--dark,
+.btn--dark:hover {
+    background-color: var(--ink);
+    color: #FFFFFF;
+}
+.btn--dark:active { background-color: #2B4A73; }
+.btn:disabled { opacity: 0.55; }
+
 
 /* ---------- toast ---------- */
 

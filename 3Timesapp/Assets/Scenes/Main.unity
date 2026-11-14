@@ -193,6 +193,7 @@ GameObject:
   - component: {fileID: 137970789}
   - component: {fileID: 137970788}
   - component: {fileID: 137970787}
+  - component: {fileID: 137970793}
   m_Layer: 0
   m_Name: App
   m_TagString: Untagged
@@ -217,7 +218,6 @@ MonoBehaviour:
   tracker: {fileID: 137970789}
   arRoot: {fileID: 1638620999}
   splashSeconds: 1.5
-  locationTimeout: 15
   vpsTimeout: 10
   geospatialSupportTimeout: 15
   localizationTimeout: 60
@@ -311,6 +311,27 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &137970793
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 137970786}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 16d3585a7c9e545f3aba52ad3ab69736, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ThreeTimes.AR.TraceManager
+  anchorManager: {fileID: 1787778394}
+  earthManager: {fileID: 1787778393}
+  tracker: {fileID: 137970789}
+  mainView: {fileID: 137970788}
+  router: {fileID: 137970790}
+  markerPrefab: {fileID: 8878754237680843487, guid: 2a0526f9b568e481892be22a90387e2e, type: 3}
+  particleMaterial: {fileID: 2100000, guid: d44961dc131fd49aba3696e682c54602, type: 2}
+  distanceAhead: 2
+  heightBelowCamera: 0.3
 --- !u!1 &322503358
 GameObject:
   m_ObjectHideFlags: 0
@@ -625,8 +646,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 4966719baa26e4b0e8231a24d9bd491a, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Unity.XR.ARFoundation::UnityEngine.XR.ARFoundation.ARCameraManager
-  m_FocusMode: 1
-  m_LightEstimationMode: 0
+  m_FocusMode: -1
+  m_LightEstimationMode: -1
   m_AutoFocus: 1
   m_ImageStabilization: 0
   m_LightEstimation: 0

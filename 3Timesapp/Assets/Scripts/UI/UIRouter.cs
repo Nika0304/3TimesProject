@@ -69,6 +69,7 @@ namespace ThreeTimes.UI
             screens[AppState.Main] = Root.Q("screen-main");
             overlays.Add(Root.Q("screen-menu"));
             overlays.Add(Root.Q("screen-about"));
+            overlays.Add(Root.Q("screen-log"));
 
             checkingStatus = Root.Q<Label>("checking-status");
             localizingAccuracy = Root.Q<Label>("localizing-accuracy");

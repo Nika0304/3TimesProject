@@ -114,7 +114,11 @@
 
         <!-- 6. Ecranul principal (macheta „Prezent”) -->
         <ui:VisualElement name="screen-main" class="screen hidden" picking-mode="Ignore">
+            <!-- Prinde atingerile din zona liberă a ecranului (pe urmele din AR) -->
+            <ui:VisualElement name="tap-catcher" class="fill" />
             <ui:VisualElement name="past-tint" class="fill past-tint hidden" picking-mode="Ignore" />
+            <!-- Doar în simulare (Editor): urmele salvate, desenate peste ilustrație -->
+            <ui:VisualElement name="sim-traces" class="fill hidden" picking-mode="Ignore" />
             <ui:VisualElement class="fade-top" picking-mode="Ignore" />
             <ui:VisualElement class="fade-bottom" picking-mode="Ignore" />
 
@@ -208,6 +212,14 @@
                     <ui:Label text="Despre, surse și confidențialitate" class="list-item__text" picking-mode="Ignore" />
                     <ui:VisualElement class="icon icon--chevron" picking-mode="Ignore" />
                 </ui:Button>
+                <!-- Doar pentru teste; dispare când urmele ajung pe server -->
+                <ui:Button name="menu-log" class="list-item">
+                    <ui:Label text="Jurnal de test" class="list-item__text" picking-mode="Ignore" />
+                    <ui:VisualElement class="icon icon--chevron" picking-mode="Ignore" />
+                </ui:Button>
+                <ui:Button name="menu-clear-traces" class="list-item">
+                    <ui:Label text="Șterge urmele mele de test" class="list-item__text" picking-mode="Ignore" />
+                </ui:Button>
             </ui:VisualElement>
         </ui:VisualElement>
 
@@ -229,6 +241,98 @@
                     <ui:Label text="Această aplicație folosește Google Play Services for AR (ARCore), oferit de Google LLC și guvernat de Politica de confidențialitate Google." class="caption section" />
                     <ui:Label text="Proiect Codesign Hardware/Software, Universitatea Politehnica Timișoara, 2026–2027." class="caption" />
                 </ui:ScrollView>
+            </ui:VisualElement>
+        </ui:VisualElement>
+
+        <!-- Jurnal de test (temporar, pentru testele de ancorare) -->
+        <ui:VisualElement name="screen-log" class="screen screen--paper hidden">
+            <ui:VisualElement class="safe">
+                <ui:VisualElement class="topbar">
+                    <ui:Button name="log-back" class="round-btn">
+                        <ui:VisualElement class="icon icon--back" picking-mode="Ignore" />
+                    </ui:Button>
+                    <ui:Label text="Jurnal de test" class="title" />
+                    <ui:VisualElement class="topbar-spacer" />
+                </ui:VisualElement>
+                <ui:Label text="Aplicația notează singură localizările și urmele. Cele mai noi sunt sus." class="caption log-intro" />
+                <ui:ScrollView class="grow log-scroll">
+                    <ui:Label name="log-text" text="" class="log-text" />
+                </ui:ScrollView>
+                <ui:VisualElement class="row log-actions">
+                    <ui:Button name="log-clear" text="Golește" class="btn btn--secondary grow" />
+                    <ui:Button name="log-copy" text="Copiază tot" class="btn btn--dark grow gap-left" />
+                </ui:VisualElement>
+            </ui:VisualElement>
+        </ui:VisualElement>
+
+        <!-- Lasă o urmă (foaie care urcă de jos) -->
+        <ui:VisualElement name="trace-overlay" class="fill hidden">
+            <ui:Button name="trace-dim" class="sheet-dim sheet-dim--hidden" />
+            <ui:VisualElement name="trace-sheet" class="trace-sheet trace-sheet--closed">
+                <ui:VisualElement class="sheet-handle" />
+                <ui:VisualElement class="topbar">
+                    <ui:Label text="Lasă o urmă" class="title title--big" />
+                    <ui:Button name="trace-close" class="round-btn">
+                        <ui:VisualElement class="icon icon--close" picking-mode="Ignore" />
+                    </ui:Button>
+                </ui:VisualElement>
+
+                <ui:VisualElement class="segments">
+                    <ui:Button name="trace-type-text" text="Text" class="seg seg--active" />
+                    <ui:Button name="trace-type-photo" text="Poză" class="seg" />
+                    <ui:Button name="trace-type-voice" text="Voce" class="seg" />
+                </ui:VisualElement>
+
+                <ui:Label text="Mesajul tău" class="field-label" />
+                <ui:TextField name="trace-text" multiline="true" max-length="280" placeholder-text="Ce s-a întâmplat aici?" class="trace-input" />
+
+                <ui:Label text="Cum te simți?" class="field-label" />
+                <ui:VisualElement class="chips">
+                    <ui:Button name="chip-joy" class="chip chip--joy chip--active">
+                        <ui:VisualElement class="chip__icon shape--joy-1" picking-mode="Ignore" />
+                        <ui:Label text="bucurie" class="chip__label" picking-mode="Ignore" />
+                    </ui:Button>
+                    <ui:Button name="chip-sadness" class="chip chip--sadness">
+                        <ui:VisualElement class="chip__icon shape--sadness-1" picking-mode="Ignore" />
+                        <ui:Label text="tristețe" class="chip__label" picking-mode="Ignore" />
+                    </ui:Button>
+                    <ui:Button name="chip-longing" class="chip chip--longing">
+                        <ui:VisualElement class="chip__icon shape--longing-1" picking-mode="Ignore" />
+                        <ui:Label text="dor" class="chip__label" picking-mode="Ignore" />
+                    </ui:Button>
+                </ui:VisualElement>
+
+                <ui:Label name="trace-suggestion" text="Scrie mesajul și îți propunem o emoție." class="caption suggestion" />
+
+                <ui:VisualElement class="segments">
+                    <ui:Button name="intensity-0" text="încet" class="seg" />
+                    <ui:Button name="intensity-1" text="mediu" class="seg seg--active" />
+                    <ui:Button name="intensity-2" text="puternic" class="seg" />
+                </ui:VisualElement>
+
+                <ui:VisualElement class="trace-preview">
+                    <ui:VisualElement name="trace-shape" class="trace-shape trace-shape--1 shape--joy-1" />
+                </ui:VisualElement>
+
+                <ui:Button name="trace-submit" text="Lasă urma aici" class="btn btn--primary" />
+            </ui:VisualElement>
+        </ui:VisualElement>
+
+        <!-- Ecranul unei urme -->
+        <ui:VisualElement name="detail-overlay" class="fill hidden">
+            <ui:Button name="detail-dim" class="sheet-dim sheet-dim--hidden" />
+            <ui:VisualElement name="detail-card" class="detail-card detail-card--closed">
+                <ui:VisualElement class="row">
+                    <ui:VisualElement name="detail-shape" class="detail-shape shape--joy-1" />
+                    <ui:Label name="detail-emotion" text="bucurie" class="detail-emotion detail-emotion--joy" />
+                </ui:VisualElement>
+                <ui:Label name="detail-text" text="" class="detail-text" />
+                <ui:Label name="detail-meta" text="" class="caption" />
+                <ui:VisualElement class="row detail-actions">
+                    <ui:Button name="detail-report" text="Raportează" class="btn btn--secondary grow" />
+                    <ui:Button name="detail-close" text="Închide" class="btn btn--dark grow gap-left" />
+                </ui:VisualElement>
+                <ui:Button name="detail-delete" text="Șterge urma mea" class="btn btn--ghost" />
             </ui:VisualElement>
         </ui:VisualElement>
 
