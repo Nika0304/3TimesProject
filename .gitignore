@@ -1,0 +1,30 @@
+# Sistem de operare
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editoare
+.idea/
+.vscode/
+*.swp
+
+# Secrete (nu intră niciodată în repo)
+.env
+*.keystore
+*.jks
+
+# Backend (Java / Gradle / Maven), pentru mai târziu
+backend/target/
+backend/build/
+backend/.gradle/
+
+# Fișiere temporare Office (apar cât timp un document e deschis)
+~$*
+
+# Arhive puse din greșeală
+*.zip
+
+# Regulile pentru Unity sunt în unityapp/.gitignore
+
+# Notițe locale de configurare (nu intră în repo)
+docs/SETUP-UNITY.md
