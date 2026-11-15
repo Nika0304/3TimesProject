@@ -12,6 +12,10 @@
 # Cheia ARCore API se pune local, pe fiecare laptop
 /ProjectSettings/ARCoreExtensionsProjectSettings.json
 
+# Cheia hărții (CARTO) se pune local, pe fiecare laptop (model: MapConfig.example.json)
+/Assets/Resources/MapConfig.json
+/Assets/Resources/MapConfig.json.meta
+
 # IDE
 .vs/
 .vscode/

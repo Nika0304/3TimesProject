@@ -3,18 +3,19 @@ using UnityEngine;
 namespace ThreeTimes.AR
 {
     /// <summary>
-    /// Mișcarea lentă a unei forme: floarea pulsează, picătura coboară și urcă ușor,
-    /// semiluna se leagănă. Forma se întoarce mereu cu fața spre telefon.
+    /// Mișcarea lentă a unei forme, aleasă de AI odată cu forma: pulse (pulsează), sway (se leagănă), drift (coboară și
+    /// urcă), flicker (tremură ușor, ca o flacără), breathe (respiră rar), spin (se rotește încet).
+    /// Forma se întoarce mereu cu fața spre telefon.
     /// </summary>
     public class TraceShapeAnimator : MonoBehaviour
     {
-        string emotionKey = "joy";
+        string motion = "breathe";
         int level = 1;
         float phase; // decalaj, ca urmele să nu se miște toate la fel
 
-        public void Setup(string emotion, int intensityLevel, int seed)
+        public void Setup(string motionName, int intensityLevel, int seed)
         {
-            emotionKey = emotion;
+            motion = string.IsNullOrEmpty(motionName) ? "breathe" : motionName;
             level = intensityLevel;
             phase = Mathf.Abs(seed % 1000) / 1000f * 6.28f;
         }
@@ -35,21 +36,31 @@ namespace ThreeTimes.AR
 
             float scale = 1f;
             float lift = 0f;
-            switch (emotionKey)
+            float roll = 0f;
+            switch (motion)
             {
-                case "sadness":
+                case "pulse":   // mai repede când emoția e mai puternică
+                    scale = 1f + 0.06f * Mathf.Sin(t * (1.6f + 0.5f * level));
+                    break;
+                case "sway":
+                    roll = 10f * Mathf.Sin(t * 0.6f);
+                    break;
+                case "drift":
                     lift = 0.04f * Mathf.Sin(t * 0.9f);
                     break;
-                case "longing":
-                    rotation = rotation * Quaternion.Euler(0f, 0f, 10f * Mathf.Sin(t * 0.6f));
+                case "flicker":
+                    scale = 1f + 0.035f * Mathf.Sin(t * 7.3f) + 0.025f * Mathf.Sin(t * 11.1f);
+                    lift = 0.01f * Mathf.Sin(t * 5.7f);
                     break;
-                default:
-                    // Bucuria pulsează mai repede când e mai puternică.
-                    scale = 1f + 0.06f * Mathf.Sin(t * (1.6f + 0.5f * level));
+                case "spin":
+                    roll = t * (12f + 6f * level);
+                    break;
+                default:        // breathe
+                    scale = 1f + 0.04f * Mathf.Sin(t * 0.7f);
                     break;
             }
 
-            transform.rotation = rotation;
+            transform.rotation = rotation * Quaternion.Euler(0f, 0f, roll);
             transform.localScale = Vector3.one * scale;
             transform.localPosition = new Vector3(0f, lift, 0f);
         }

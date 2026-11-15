@@ -936,3 +936,176 @@
     background-color: var(--coral);
 }
 .capture-shutter:active .capture-shutter__inner { background-color: var(--coral-pressed); }
+
+/* ---------- meniu: serverul ---------- */
+
+.server-label { margin-top: 24px; }
+.server-input { margin: 0; padding: 0; height: 44px; }
+.server-input > .unity-base-text-field__input,
+.server-input .unity-text-field__input {
+    background-color: var(--surface);
+    border-width: 1px;
+    border-color: var(--line);
+    border-radius: 14px;
+    padding: 0 12px;
+    font-size: 15px;
+    color: var(--ink);
+}
+.server-status { margin-top: 8px; }
+
+/* ---------- harta ---------- */
+
+.map-view { background-color: #F2F2EF; overflow: hidden; }
+.map-tile {
+    position: absolute;
+    -unity-background-scale-mode: stretch-to-fill;
+}
+.map-marker {
+    position: absolute;
+    width: 30px;
+    height: 30px;
+    translate: -50% -50%;
+}
+.map-marker__shape {
+    position: absolute;
+    left: 0; top: 0;
+    width: 30px;
+    height: 30px;
+    -unity-background-scale-mode: scale-to-fit;
+}
+/* Urmele tale au un inel corai în jur. */
+.map-marker--mine {
+    border-width: 2px;
+    border-color: var(--coral);
+    border-radius: 17px;
+}
+.map-me {
+    position: absolute;
+    width: 18px;
+    height: 18px;
+    translate: -50% -50%;
+    border-radius: 9px;
+    border-width: 3px;
+    border-color: #FFFFFF;
+    background-color: var(--ink);
+}
+.map-status {
+    flex-grow: 1;
+    margin: 0 10px;
+    padding: 8px 12px;
+    font-size: 13px;
+    color: var(--ink);
+    white-space: normal;
+    -unity-text-align: middle-center;
+    background-color: rgba(255, 255, 255, 0.9);
+    border-radius: 16px;
+}
+.map-controls { align-self: flex-end; margin-bottom: 10px; }
+.map-control,
+.map-control:hover {
+    margin-top: 8px;
+    font-size: 22px;
+    color: var(--ink);
+    -unity-text-align: middle-center;
+}
+.map-locate-dot {
+    width: 14px;
+    height: 14px;
+    border-radius: 7px;
+    border-width: 3px;
+    border-color: var(--ink);
+}
+.map-attribution {
+    align-self: flex-end;
+    font-size: 10px;
+    color: var(--muted);
+    background-color: rgba(255, 255, 255, 0.8);
+    border-radius: 6px;
+    padding: 1px 6px;
+    margin: 0 0 8px 0;
+}
+.map-card {
+    background-color: var(--surface);
+    border-radius: 26px;
+    padding: 16px 18px 14px 18px;
+}
+.map-card__holder { width: 52px; height: 52px; margin-right: 12px; }
+.map-card__shape {
+    position: absolute;
+    left: 0; top: 0;
+    width: 52px;
+    height: 52px;
+    -unity-background-scale-mode: scale-to-fit;
+}
+.map-card__text { justify-content: center; }
+.map-card__distance { margin: 12px 0 4px 0; }
+.map-card__open { margin-top: 12px; }
+
+/* ---------- emoții libere (alese de AI) ---------- */
+
+.emotion-custom { margin-top: 8px; }
+.emotion-custom .server-input { height: 40px; }
+/* Mai puțin loc pentru cipuri și previzualizare, ca să încapă și rândul „Altă emoție”. */
+.chip,
+.chip:hover,
+.chip:active { height: 58px; }
+.trace-preview { min-height: 70px; }
+.chip__label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 96%; }
+
+/* ---------- Time postcard ---------- */
+
+.postcard-dim { background-color: rgba(31, 58, 95, 0.55); }
+.postcard-card {
+    width: 100%;
+    background-color: #FFFDF8;
+    padding: 12px 12px 14px 12px;
+    border-radius: 6px;   /* fără rotire: cartea se salvează exact cum e pe ecran, ca dreptunghi */
+}
+.postcard-photo {
+    height: 380px;
+    border-radius: 3px;
+    background-color: var(--bg);
+    -unity-background-scale-mode: scale-and-crop;
+}
+.postcard-caption { margin-top: 12px; align-items: flex-end; }
+.postcard-word {
+    -unity-font: url("Fonts/Fraunces-Medium.ttf");
+    -unity-font-definition: initial;
+    font-size: 40px;
+    color: var(--ink);
+    margin: 0;
+    padding: 0;
+}
+.postcard-meta { font-size: 12px; color: var(--muted); margin: 0; padding: 0; }
+.postcard-right { align-items: flex-end; }
+.postcard-emotions { justify-content: flex-end; margin-bottom: 2px; }
+.postcard-emotion {
+    width: 26px;
+    height: 26px;
+    margin-left: 2px;
+    -unity-background-scale-mode: scale-to-fit;
+}
+.postcard-count { margin-bottom: 6px; }
+.postcard-logo .logo__three,
+.postcard-logo .logo__times { font-size: 20px; }
+.postcard-saved {
+    width: 100%;
+    flex-grow: 1;
+    -unity-background-scale-mode: scale-to-fit;
+}
+.postcard-actions { margin-top: 12px; }
+
+.postcards-empty { margin: 12px 0; }
+.postcards-grid { flex-direction: row; flex-wrap: wrap; justify-content: space-between; }
+.postcard-thumb,
+.postcard-thumb:hover,
+.postcard-thumb:active {
+    width: 48%;
+    height: 220px;
+    margin: 0 0 12px 0;
+    padding: 0;
+    border-width: 0;
+    border-radius: 8px;
+    background-color: var(--surface);
+    -unity-background-scale-mode: scale-to-fit;
+}

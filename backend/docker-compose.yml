@@ -1,0 +1,44 @@
+# Pornește serverul 3Times și baza de date (PostgreSQL + PostGIS) pe laptop:
+#   docker compose up --build
+# Serverul ascultă pe portul 8080 (http://localhost:8080, din rețea http://<IP-ul laptopului>:8080).
+# Datele rămân în volumul „threetimes-db” și după oprire.
+
+services:
+  db:
+    image: postgis/postgis:16-3.4
+    environment:
+      POSTGRES_DB: threetimes
+      POSTGRES_USER: threetimes
+      POSTGRES_PASSWORD: threetimes
+    volumes:
+      - threetimes-db:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:5433:5432"   # doar de pe laptop (pentru DBeaver/psql), nu din rețea
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U threetimes -d threetimes"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  api:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DB_URL: jdbc:postgresql://db:5432/threetimes
+      DB_USER: threetimes
+      DB_PASSWORD: threetimes
+      DEVICE_SALT: 3times-local-dev
+      # Din backend/.env (nu intră în repo). Fără cheie, propunerea emoției rămâne cea locală, din aplicație.
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3.5-flash-lite}
+      GEMINI_FALLBACK_MODEL: ${GEMINI_FALLBACK_MODEL:-gemini-flash-latest}
+      # Parola paginii de admin (/admin), tot din backend/.env. Fără ea, adminul e oprit.
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+
+volumes:
+  threetimes-db:

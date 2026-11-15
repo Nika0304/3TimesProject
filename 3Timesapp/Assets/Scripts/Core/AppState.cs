@@ -52,6 +52,8 @@ namespace ThreeTimes.Core
         /// <summary>SELFIE, PLACE sau PLACE_WITH_TRACES (doar la poză).</summary>
         public string PhotoSource;
         public float DurationSeconds;
+        /// <summary>Emoția (nume liber) și forma ei, propuse de AI sau alese de utilizator.</summary>
+        public ThreeTimes.Data.EmotionLook Look;
         public Emotion Emotion;
         /// <summary>0 = încet, 1 = mediu, 2 = puternic.</summary>
         public int Intensity;

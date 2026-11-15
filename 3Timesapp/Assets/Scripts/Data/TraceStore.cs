@@ -15,7 +15,14 @@ namespace ThreeTimes.Data
         public string mediaFile;      // numele fișierului din media/ (poză .jpg sau voce .wav), gol la text
         public string photoSource;    // SELFIE, PLACE, PLACE_WITH_TRACES (doar la poză)
         public float durationSeconds; // durata înregistrării (doar la voce)
-        public string emotion;        // JOY, SADNESS, LONGING
+        public string emotion;        // numele emoției, liber („dor”, „recunoștință”); urmele vechi: JOY, SADNESS, LONGING
+        // Forma emoției, aleasă de AI (vezi TraceStyle). Goală la urmele vechi: atunci se folosește forma de dinainte.
+        public string shape;
+        public string color;
+        public string accentColor;
+        public int petals;
+        public float sharpness;
+        public string motion;
         public float intensity;       // 0..1
         public double latitude;
         public double longitude;
@@ -24,12 +31,18 @@ namespace ThreeTimes.Data
         public float accuracyMeters;  // precizia orizontală din momentul plasării
         public float yawAccuracyDegrees; // precizia orientării din momentul plasării
         public string createdAt;      // ISO 8601, UTC
-        public bool reported;         // marcată pentru moderare (până la server, doar local)
+        public bool reported;         // raportată de telefonul acesta
+
+        // Legătura cu serverul
+        public bool mine = true;      // lăsată de telefonul acesta (urmele primite de la server spun singure)
+        public bool synced;           // urma proprie a ajuns pe server
+        public bool hasMedia;         // are poză sau voce pe server (la urmele altora, fișierul se descarcă la deschidere)
+        public string syncError;      // serverul a refuzat-o (nu se mai retrimite); gol dacă e în regulă
     }
 
     /// <summary>
-    /// Ține urmele într-un fișier JSON pe telefon (persistentDataPath/traces.json).
-    /// Când serverul e gata, doar clasa asta se înlocuiește cu apeluri la API.
+    /// Ține urmele PROPRII într-un fișier JSON pe telefon (persistentDataPath/traces.json), împreună cu
+    /// ștergerile care încă n-au ajuns la server. Urmele altora vin de la server și nu se salvează.
     /// </summary>
     public static class TraceStore
     {
@@ -37,7 +50,11 @@ namespace ThreeTimes.Data
         class FileData
         {
             public List<SavedTrace> traces = new List<SavedTrace>();
+            public List<string> pendingDeletes = new List<string>();
         }
+
+        /// <summary>Id-urile urmelor proprii șterse pe telefon, dar încă nu și pe server.</summary>
+        public static List<string> PendingDeletes { get; private set; } = new List<string>();
 
         static string FilePath => Path.Combine(Application.persistentDataPath, "traces.json");
 
@@ -47,7 +64,15 @@ namespace ThreeTimes.Data
             {
                 if (!File.Exists(FilePath)) return new List<SavedTrace>();
                 var data = JsonUtility.FromJson<FileData>(File.ReadAllText(FilePath));
-                return data?.traces ?? new List<SavedTrace>();
+                PendingDeletes = data?.pendingDeletes ?? new List<string>();
+                var traces = data?.traces ?? new List<SavedTrace>();
+                // Urmele vechi aveau id-ul fără cratime; serverul le scrie cu cratime. Le aducem la aceeași formă.
+                foreach (var t in traces)
+                {
+                    t.id = NormalizeId(t.id);
+                    t.mine = true;
+                }
+                return traces;
             }
             catch (Exception e)
             {
@@ -60,12 +85,16 @@ namespace ThreeTimes.Data
         {
             try
             {
-                File.WriteAllText(FilePath, JsonUtility.ToJson(new FileData { traces = traces }, true));
+                File.WriteAllText(FilePath, JsonUtility.ToJson(new FileData { traces = traces, pendingDeletes = PendingDeletes }, true));
             }
             catch (Exception e)
             {
                 Debug.LogWarning($"[3Times] Nu am putut salva urmele: {e.Message}");
             }
         }
+    
+        /// <summary>Id-ul în forma serverului: GUID cu cratime, litere mici.</summary>
+        public static string NormalizeId(string id) =>
+            Guid.TryParse(id, out var g) ? g.ToString() : id;
     }
 }

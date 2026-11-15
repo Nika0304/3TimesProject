@@ -1,0 +1,47 @@
+# Setările serverului 3Times. Valorile din ${...} vin din variabile de mediu (docker-compose.yml),
+# cu valori implicite pentru rularea locală.
+server:
+  port: ${PORT:8080}
+
+spring:
+  application:
+    name: threetimes-backend
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/threetimes}
+    username: ${DB_USER:threetimes}
+    password: ${DB_PASSWORD:threetimes}
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+  servlet:
+    multipart:
+      max-file-size: 5MB
+      max-request-size: 6MB
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+
+threetimes:
+  # Sare pentru amprenta telefonului (X-Device-Id). Pe serverul online se pune o valoare secretă.
+  device-salt: ${DEVICE_SALT:3times-local-dev}
+  # Parola paginii de admin (http://localhost:8080/admin). Goală = adminul e oprit. Se pune în backend/.env.
+  admin-password: ${ADMIN_PASSWORD:}
+  # După câte raportări de la telefoane diferite o urmă e ascunsă până la moderare.
+  reports-to-hide: ${REPORTS_TO_HIDE:3}
+  # Limitele cererii „urmele din jur”.
+  max-radius-meters: 15000   # harta poate arăta tot orașul
+  max-limit: 200
+
+  # Propunerea emoției prin LLM (Google Gemini). Fără cheie, endpoint-ul răspunde 503 și aplicația
+  # folosește propunerea locală. Cheia se pune în backend/.env (GEMINI_API_KEY=...), care nu intră în repo.
+  llm:
+    timeout-ms: ${LLM_TIMEOUT_MS:4000}   # pe încercare; se reîncearcă o dată
+    per-device-per-minute: ${LLM_PER_DEVICE_PER_MINUTE:20}
+    gemini:
+      api-key: ${GEMINI_API_KEY:}
+      # Un model „lite” e destul pentru a alege o emoție și e mai rar supraîncărcat pe nivelul gratuit.
+      model: ${GEMINI_MODEL:gemini-3.5-flash-lite}
+      fallback-model: ${GEMINI_FALLBACK_MODEL:gemini-flash-latest}

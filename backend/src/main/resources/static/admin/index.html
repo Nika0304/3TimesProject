@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>3Times · Moderare</title>
+<style>
+  :root {
+    --bg: #F4F5FB; --surface: #FFFFFF; --line: #E4E2EF; --ink: #1F3A5F; --muted: #6B6785;
+    --coral: #FF8A6E; --coral-ink: #2B1712; --danger: #C8423A; --warn: #B98A52; --warn-bg: #F6E9D7;
+    --ok: #2F9C82; --ok-bg: #DDF3EC;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  header { position: sticky; top: 0; z-index: 2; background: var(--bg); border-bottom: 1px solid var(--line);
+           padding: 14px 24px; display: flex; align-items: center; gap: 16px; }
+  .logo { font-weight: 800; font-size: 22px; }
+  .logo i { font-family: Georgia, serif; color: #E0664B; font-weight: 400; }
+  header h1 { font-size: 16px; font-weight: 600; margin: 0; color: var(--muted); }
+  header .spacer { flex: 1; }
+  .filters { display: flex; gap: 6px; }
+  main { max-width: 1100px; margin: 0 auto; padding: 20px 24px 60px; }
+  #status { color: var(--muted); margin: 0 0 16px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px; }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 16px;
+          display: flex; flex-direction: column; gap: 10px; }
+  .card.gone { opacity: .45; pointer-events: none; }
+  .top { display: flex; align-items: center; gap: 10px; }
+  .dot { width: 14px; height: 14px; border-radius: 50%; flex: none; }
+  .emotion { font-family: Georgia, serif; font-style: italic; font-size: 18px; }
+  .type { margin-left: auto; color: var(--muted); font-size: 13px; }
+  .badges { display: flex; flex-wrap: wrap; gap: 6px; }
+  .badge { font-size: 12px; font-weight: 600; padding: 3px 9px; border-radius: 999px; }
+  .badge.hidden { background: #FBE3E1; color: var(--danger); }
+  .badge.review { background: var(--warn-bg); color: var(--warn); }
+  .badge.reports { background: var(--bg); color: var(--ink); }
+  .text { white-space: pre-wrap; word-break: break-word; font-size: 16px; }
+  .text.empty { color: var(--muted); font-style: italic; font-size: 14px; }
+  img.photo { width: 100%; max-height: 320px; object-fit: contain; background: var(--bg); border-radius: 10px; }
+  audio { width: 100%; }
+  .why { font-size: 13px; color: var(--muted); }
+  .why ul { margin: 4px 0 0; padding-left: 18px; }
+  .meta { font-size: 12px; color: var(--muted); }
+  .meta a { color: var(--muted); }
+  .actions { display: flex; gap: 8px; margin-top: auto; }
+  button { font: inherit; font-weight: 600; border-radius: 999px; padding: 8px 16px; cursor: pointer;
+           border: 1px solid var(--line); background: var(--surface); color: var(--ink); }
+  button.keep { background: var(--ok-bg); border-color: var(--ok-bg); color: var(--ok); flex: 1; }
+  button.del { color: var(--danger); }
+  button.on { background: var(--ink); color: #fff; border-color: var(--ink); }
+  button.refresh { background: var(--coral); border-color: var(--coral); color: var(--coral-ink); }
+  .empty-state { text-align: center; color: var(--muted); padding: 60px 0; }
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">3<i>Times</i></div>
+  <h1>Moderare</h1>
+  <div class="spacer"></div>
+  <div class="filters">
+    <button data-filter="all" class="on">Toate</button>
+    <button data-filter="hidden">Ascunse</button>
+    <button data-filter="reported">Raportate</button>
+    <button data-filter="review">De verificat (AI)</button>
+  </div>
+  <button class="refresh" id="refresh">Reîncarcă</button>
+</header>
+<main>
+  <p id="status">Se încarcă…</p>
+  <div class="grid" id="grid"></div>
+</main>
+<script>
+  const TYPES = { TEXT: "Text", PHOTO: "Poză", VOICE: "Voce" };
+  const SOURCES = { SELFIE: "selfie", PLACE: "locul", PLACE_WITH_TRACES: "locul cu urme" };
+  const LEGACY = { JOY: ["bucurie", "#F5B83D"], SADNESS: ["tristețe", "#5B95E6"], LONGING: ["dor", "#9C78E3"] };
+  let items = [];
+  let filter = "all";
+
+  const grid = document.getElementById("grid");
+  const status = document.getElementById("status");
+
+  function el(tag, cls, text) {
+    const e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text != null) e.textContent = text;   // textContent: conținutul urmelor nu e niciodată interpretat ca HTML
+    return e;
+  }
+
+  async function load() {
+    status.textContent = "Se încarcă…";
+    try {
+      const r = await fetch("/api/v1/admin/queue", { cache: "no-store" });
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || "Eroare " + r.status);
+      items = (await r.json()).items;
+      render();
+    } catch (e) {
+      status.textContent = "Nu am putut încărca lista: " + e.message;
+    }
+  }
+
+  function matches(t) {
+    if (filter === "hidden") return t.hidden;
+    if (filter === "reported") return t.reportCount > 0;
+    if (filter === "review") return t.moderation === "review";
+    return true;
+  }
+
+  function render() {
+    grid.replaceChildren();
+    const shown = items.filter(matches);
+    const hidden = items.filter(t => t.hidden).length;
+    status.textContent = items.length === 0 ? "" :
+      `${items.length} urme de verificat · ${hidden} ascunse după raportări`;
+    if (shown.length === 0) {
+      grid.append(el("div", "empty-state", items.length === 0 ? "Nimic de verificat. 🎉" : "Nimic în acest filtru."));
+      return;
+    }
+    for (const t of shown) grid.append(card(t));
+  }
+
+  function card(t) {
+    const c = el("div", "card");
+    const [legacyName, legacyColor] = LEGACY[t.emotion] || [t.emotion, null];
+
+    const top = el("div", "top");
+    const dot = el("span", "dot");
+    dot.style.background = t.color || legacyColor || "#C9B4FF";
+    top.append(dot, el("span", "emotion", legacyName));
+    let type = TYPES[t.type] || t.type;
+    if (t.type === "PHOTO" && SOURCES[t.photoSource]) type += " · " + SOURCES[t.photoSource];
+    if (t.type === "VOICE") type += ` · ${Math.round(t.durationSeconds)} s`;
+    top.append(el("span", "type", type));
+    c.append(top);
+
+    const badges = el("div", "badges");
+    if (t.hidden) badges.append(el("span", "badge hidden", "Ascunsă"));
+    if (t.reportCount > 0) badges.append(el("span", "badge reports",
+      t.reportCount === 1 ? "1 raportare" : `${t.reportCount} raportări`));
+    if (t.moderation === "review") badges.append(el("span", "badge review", "De verificat (AI)"));
+    c.append(badges);
+
+    c.append(el("div", t.content ? "text" : "text empty", t.content || "(fără mesaj)"));
+
+    if (t.hasMedia && t.type === "PHOTO") {
+      const img = el("img", "photo");
+      img.loading = "lazy";
+      img.src = `/api/v1/admin/traces/${t.id}/media`;
+      c.append(img);
+    } else if (t.hasMedia && t.type === "VOICE") {
+      const audio = el("audio");
+      audio.controls = true;
+      audio.preload = "none";
+      audio.src = `/api/v1/admin/traces/${t.id}/media`;
+      c.append(audio);
+    }
+
+    if (t.moderation === "review" && t.moderationReason) {
+      const why = el("div", "why", "AI: " + t.moderationReason);
+      c.append(why);
+    }
+    if (t.reportReasons.length > 0) {
+      const why = el("div", "why", "Motivele raportărilor:");
+      const ul = el("ul");
+      for (const r of t.reportReasons) ul.append(el("li", null, r));
+      why.append(ul);
+      c.append(why);
+    }
+
+    const meta = el("div", "meta");
+    meta.append(new Date(t.createdAt).toLocaleString("ro-RO") + " · ");
+    const map = el("a", null, "pe hartă");
+    map.href = `https://www.openstreetmap.org/?mlat=${t.latitude}&mlon=${t.longitude}#map=19/${t.latitude}/${t.longitude}`;
+    map.target = "_blank";
+    map.rel = "noopener";
+    meta.append(map);
+    c.append(meta);
+
+    const actions = el("div", "actions");
+    const keep = el("button", "keep", t.hidden ? "Readuce" : "E în regulă");
+    keep.title = "Închide raportările și marchează urma ca verificată. Urma se vede din nou.";
+    keep.onclick = () => act(t, c, "POST", "keep");
+    const del = el("button", "del", "Șterge");
+    del.onclick = () => {
+      if (confirm("Ștergi urma definitiv (cu poza sau vocea ei)?")) act(t, c, "DELETE", "");
+    };
+    actions.append(keep, del);
+    c.append(actions);
+    return c;
+  }
+
+  async function act(t, c, method, action) {
+    c.classList.add("gone");
+    try {
+      const r = await fetch(`/api/v1/admin/traces/${t.id}${action ? "/" + action : ""}`, { method });
+      if (!r.ok && r.status !== 404) throw new Error((await r.json().catch(() => ({}))).error || "Eroare " + r.status);
+      items = items.filter(x => x.id !== t.id);
+      render();
+    } catch (e) {
+      c.classList.remove("gone");
+      alert("Nu a mers: " + e.message);
+    }
+  }
+
+  document.querySelectorAll("[data-filter]").forEach(b => b.onclick = () => {
+    filter = b.dataset.filter;
+    document.querySelectorAll("[data-filter]").forEach(x => x.classList.toggle("on", x === b));
+    render();
+  });
+  document.getElementById("refresh").onclick = load;
+  load();
+</script>
+</body>
+</html>

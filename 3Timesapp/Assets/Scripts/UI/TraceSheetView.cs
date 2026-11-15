@@ -1,7 +1,9 @@
 using System;
 using UnityEngine;
 using UnityEngine.UIElements;
+using System.Collections.Generic;
 using ThreeTimes.Core;
+using ThreeTimes.Data;
 using ThreeTimes.Media;
 
 namespace ThreeTimes.UI
@@ -19,6 +21,9 @@ namespace ThreeTimes.UI
         readonly UIRouter router;
         readonly MonoBehaviour host;
         readonly Func<string> submitCheck;
+        Button submitButton;
+        bool checking;   // verificarea textului (AI) e în curs
+        int openCount;   // crește la fiecare deschidere: un răspuns venit după închidere se ignoră
         readonly VoicePlayer player;
         readonly PhotoCaptureView capture;
         readonly VoiceRecorder recorder = new VoiceRecorder();
@@ -27,6 +32,9 @@ namespace ThreeTimes.UI
         readonly Label suggestionLabel, textLabel;
         readonly TextField text;
         readonly Button[] chips = new Button[3];
+        readonly VisualElement[] chipIcons = new VisualElement[3];
+        readonly Label[] chipLabels = new Label[3];
+        readonly TextField customEmotion;
         readonly Button[] intensities = new Button[3];
         readonly Button[] kinds = new Button[3];
 
@@ -36,8 +44,7 @@ namespace ThreeTimes.UI
         readonly Button voiceRecord, voicePlay;
         readonly Label voiceDuration;
 
-        static readonly string[] EmotionKeys = { "joy", "sadness", "longing" };
-        static readonly string[] EmotionNames = { "bucurie", "tristețe", "dor" };
+        static readonly string[] OldChipClasses = { "chip--joy", "chip--sadness", "chip--longing" };
         const string SuggestionText = "Scrie mesajul și îți propunem o emoție.";
         const string SuggestionMedia = "Alege emoția sau scrie o descriere și îți propunem una.";
 
@@ -46,7 +53,11 @@ namespace ThreeTimes.UI
         IVisualElementScheduledItem pendingSuggestion, recordTimer, playWatcher;
 
         VisualElement previewBackdrop;
-        Emotion emotion = Emotion.Joy;
+        // Cele trei emoții propuse (de AI sau, fără server, cele de bază) și cea aleasă.
+        List<EmotionLook> options = TraceStyle.DefaultOptions();
+        int selected;
+        int suggestionRequest;   // crește la fiecare cerere către server; răspunsurile vechi se ignoră
+        int customRequest;
         int intensity = 1;
         TraceKind kind = TraceKind.Text;
 
@@ -98,7 +109,8 @@ namespace ThreeTimes.UI
 
             root.Q<Button>("trace-close").clicked += () => Close();
             root.Q<Button>("trace-dim").clicked += () => Close();
-            root.Q<Button>("trace-submit").clicked += Submit;
+            submitButton = root.Q<Button>("trace-submit");
+            submitButton.clicked += Submit;
 
             kinds[0] = root.Q<Button>("trace-type-text");
             kinds[1] = root.Q<Button>("trace-type-photo");
@@ -126,10 +138,13 @@ namespace ThreeTimes.UI
             for (int i = 0; i < 3; i++)
             {
                 int index = i; // copie pentru lambda
-                chips[i] = root.Q<Button>("chip-" + EmotionKeys[i]);
+                chips[i] = root.Q<Button>("chip-" + i);
+                chipIcons[i] = chips[i].Q(className: "chip__icon");
+                chipLabels[i] = chips[i].Q<Label>(className: "chip__label");
+                foreach (var old in OldChipClasses) chips[i].RemoveFromClassList(old);
                 chips[i].clicked += () =>
                 {
-                    emotion = (Emotion)index;
+                    selected = index;
                     manualEmotion = true;
                     suggestionLabel.text = "Ai ales tu emoția.";
                     Refresh();
@@ -137,6 +152,10 @@ namespace ThreeTimes.UI
                 intensities[i] = root.Q<Button>("intensity-" + i);
                 intensities[i].clicked += () => { intensity = index; manualIntensity = true; Refresh(); };
             }
+
+            // Altă emoție, scrisă de utilizator: AI-ul îi alege forma.
+            customEmotion = root.Q<TextField>("emotion-custom");
+            root.Q<Button>("emotion-custom-apply").clicked += ApplyCustomEmotion;
 
             Refresh();
             RefreshMedia();
@@ -146,8 +165,11 @@ namespace ThreeTimes.UI
         {
             if (IsOpen) return;
             IsOpen = true;
+            openCount++;
             text.value = "";
-            emotion = Emotion.Joy;
+            options = TraceStyle.DefaultOptions();
+            selected = 0;
+            customEmotion.value = "";
             intensity = 1;
             manualEmotion = manualIntensity = false;
             SelectKind(TraceKind.Text);
@@ -167,6 +189,7 @@ namespace ThreeTimes.UI
         {
             if (!IsOpen) return;
             IsOpen = false;
+            suggestionRequest++;
             if (capture.IsOpen) capture.Cancel();
             text.Blur(); // închide tastatura
             pendingSuggestion?.Pause();
@@ -197,7 +220,9 @@ namespace ThreeTimes.UI
             string message = (text.value ?? "").Trim();
             if (recorder.IsRecording) FinishRecording();
 
-            var draft = new TraceDraft { Text = message, Emotion = emotion, Intensity = intensity };
+            var look = options[selected].Copy();
+            look.intensity = intensity;
+            var draft = new TraceDraft { Text = message, Look = look, Intensity = intensity };
             switch (kind)
             {
                 case TraceKind.Text:
@@ -227,8 +252,48 @@ namespace ThreeTimes.UI
                 return;
             }
 
+            // Textul trece întâi prin moderare (AI, pe server). Dacă e refuzat, foaia rămâne deschisă și se poate corecta.
+            if (message.Length > 0 && ServerSettings.IsConfigured)
+            {
+                if (checking) return;
+                SetChecking(true);
+                int session = openCount;
+                host.StartCoroutine(TraceApi.Moderate(message, (verdict, reason) =>
+                {
+                    SetChecking(false);
+                    if (!IsOpen || session != openCount) return; // foaia s-a închis între timp
+                    if (verdict == "block")
+                    {
+                        router.Toast(string.IsNullOrEmpty(reason)
+                            ? "Mesajul nu respectă regulile aplicației. Schimbă-l puțin și încearcă din nou."
+                            : $"{reason} Schimbă mesajul și încearcă din nou.", 6f);
+                        return;
+                    }
+                    Finish(draft);
+                }));
+                return;
+            }
+            Finish(draft);
+        }
+
+        void Finish(TraceDraft draft)
+        {
+            // Precizia se poate schimba cât așteptăm verificarea: mai întrebăm o dată.
+            string blocked = submitCheck?.Invoke();
+            if (blocked != null)
+            {
+                router.Toast(blocked, 4f);
+                return;
+            }
             Close(draft.MediaFile);
             Submitted?.Invoke(draft);
+        }
+
+        void SetChecking(bool on)
+        {
+            checking = on;
+            submitButton.text = on ? "Se verifică…" : "Lasă urma aici";
+            submitButton.SetEnabled(!on);
         }
 
         // ---------------------------------------------------------------- tipul urmei
@@ -386,45 +451,119 @@ namespace ThreeTimes.UI
 
         // ---------------------------------------------------------------- emoție
 
-        /// <summary>Citește mesajul și propune emoția și intensitatea (utilizatorul le poate schimba).</summary>
+        /// <summary>
+        /// Citește mesajul și propune emoția și intensitatea (utilizatorul le poate schimba). Întâi local, din
+        /// cuvinte-cheie (imediat, doar bucurie / tristețe / dor); apoi, dacă serverul răspunde, AI-ul propune trei
+        /// emoții libere, fiecare cu forma ei.
+        /// </summary>
         void Suggest()
         {
             if (!IsOpen) return;
+            AskServer(text.value);
+            if (manualEmotion) return;
+
             var suggestion = EmotionSuggester.Suggest(text.value);
             if (!suggestion.HasValue)
             {
-                if (!manualEmotion) suggestionLabel.text = kind == TraceKind.Text ? SuggestionText : SuggestionMedia;
+                suggestionLabel.text = kind == TraceKind.Text ? SuggestionText : SuggestionMedia;
                 return;
             }
-
             if (!manualIntensity) intensity = suggestion.Value.Intensity;
-            if (!manualEmotion)
-            {
-                emotion = suggestion.Value.Emotion;
-                suggestionLabel.text = $"Propus după mesajul tău: {EmotionNames[(int)emotion]}. O poți schimba.";
-            }
+            options = TraceStyle.DefaultOptions();
+            selected = (int)suggestion.Value.Emotion; // ordinea: bucurie, tristețe, dor
+            suggestionLabel.text = $"Propus după mesajul tău: {options[selected].emotion}. O poți schimba.";
             Refresh();
+        }
+
+        void AskServer(string message)
+        {
+            message = (message ?? "").Trim();
+            int request = ++suggestionRequest;
+            if (message.Length < 3 || !ServerSettings.IsConfigured || manualEmotion) return;
+
+            host.StartCoroutine(TraceApi.SuggestEmotion(message, null, looks =>
+            {
+                // Între timp textul s-a schimbat, foaia s-a închis sau utilizatorul a ales singur: ignorăm.
+                if (looks == null || looks.Count == 0 || request != suggestionRequest || !IsOpen || manualEmotion) return;
+                var fresh = new List<EmotionLook>(looks);
+                foreach (var extra in TraceStyle.DefaultOptions())
+                    if (fresh.Count < 3 && !fresh.Exists(l => l.emotion == extra.emotion)) fresh.Add(extra);
+                options = fresh.GetRange(0, 3);
+                selected = 0;
+                if (!manualIntensity) intensity = Mathf.Clamp(options[0].intensity, 0, 2);
+                suggestionLabel.text = $"Propus după mesajul tău: {options[0].emotion}. Poți alege alta sau scrie tu una.";
+                Refresh();
+            }));
+        }
+
+        /// <summary>Utilizatorul scrie o emoție: o punem pe locul al treilea, iar AI-ul îi alege forma.</summary>
+        void ApplyCustomEmotion()
+        {
+            string word = (customEmotion.value ?? "").Trim().ToLowerInvariant();
+            customEmotion.Blur();
+            if (word.Length == 0)
+            {
+                router.Toast("Scrie emoția pe care o simți.");
+                return;
+            }
+            if (word.Length > 30) word = word.Substring(0, 30);
+
+            manualEmotion = true;
+            suggestionRequest++; // propunerile în curs nu mai contează
+            options[2] = TraceStyle.FromWord(word); // o formă provizorie, până răspunde AI-ul
+            selected = 2;
+            customEmotion.value = "";
+            Refresh();
+
+            if (!ServerSettings.IsConfigured)
+            {
+                suggestionLabel.text = "Ai ales tu emoția.";
+                return;
+            }
+            suggestionLabel.text = $"Căutăm o formă pentru „{word}”…";
+            int request = ++customRequest;
+            host.StartCoroutine(TraceApi.SuggestEmotion((text.value ?? "").Trim(), word, looks =>
+            {
+                if (request != customRequest || !IsOpen) return;
+                if (looks != null && looks.Count > 0)
+                {
+                    var look = looks[0];
+                    look.emotion = word; // numele rămâne cel scris de utilizator
+                    options[2] = look;
+                }
+                suggestionLabel.text = "Ai ales tu emoția.";
+                Refresh();
+            }));
         }
 
         void Refresh()
         {
             for (int i = 0; i < 3; i++)
             {
-                chips[i].EnableInClassList("chip--active", (int)emotion == i);
+                var style = TraceStyle.Of(WithLevel(options[i], 1));
+                chipLabels[i].text = options[i].emotion;
+                chipIcons[i].style.backgroundImage = new StyleBackground(TraceIcon.Get(style));
+                bool active = selected == i;
+                chips[i].style.borderTopColor = chips[i].style.borderRightColor =
+                    chips[i].style.borderBottomColor = chips[i].style.borderLeftColor =
+                        active ? new StyleColor(style.Color) : new StyleColor(StyleKeyword.Null);
+                chips[i].style.backgroundColor = active ? new StyleColor(style.Soft) : new StyleColor(StyleKeyword.Null);
+
                 intensities[i].EnableInClassList("seg--active", intensity == i);
                 shape.EnableInClassList("trace-shape--" + i, intensity == i);
             }
 
-            // O singură clasă shape--<emoție>-<intensitate> activă: ea alege imaginea formei.
-            for (int e = 0; e < 3; e++)
-                for (int i = 0; i < 3; i++)
-                    shape.EnableInClassList($"shape--{EmotionKeys[e]}-{i}", (int)emotion == e && intensity == i);
+            // Previzualizarea: forma emoției alese, la intensitatea aleasă.
+            var chosen = TraceStyle.Of(WithLevel(options[selected], intensity));
+            foreach (var k in TraceLook.Keys)
+                for (int i = 0; i < 3; i++) shape.RemoveFromClassList($"shape--{k}-{i}");
+            shape.style.backgroundImage = new StyleBackground(TraceIcon.Get(chosen));
 
             // În spatele formei: polaroid (poză) sau microfon (voce), ca în AR.
             previewBackdrop?.RemoveFromHierarchy();
             string type = kind == TraceKind.Photo ? "PHOTO" : kind == TraceKind.Voice ? "VOICE" : "TEXT";
             float size = intensity == 0 ? 72f : intensity == 1 ? 100f : 128f;
-            previewBackdrop = TraceTypeBackdrop.Create(type, EmotionKeys[(int)emotion], size);
+            previewBackdrop = TraceTypeBackdrop.Create(type, chosen.Color, size);
             if (previewBackdrop != null && shape.parent != null)
             {
                 // Centrat în previzualizare, exact sub formă.
@@ -433,6 +572,13 @@ namespace ThreeTimes.UI
                 previewBackdrop.style.translate = new Translate(Length.Percent(-50), Length.Percent(-50));
                 shape.parent.Insert(shape.parent.IndexOf(shape), previewBackdrop);
             }
+        }
+
+        static EmotionLook WithLevel(EmotionLook look, int level)
+        {
+            var copy = look.Copy();
+            copy.intensity = level;
+            return copy;
         }
     }
 }

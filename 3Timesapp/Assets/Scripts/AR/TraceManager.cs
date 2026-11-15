@@ -60,6 +60,16 @@ namespace ThreeTimes.AR
         [Tooltip("Cât de des (s) verificăm ce urme au intrat sau au ieșit din rază.")]
         [SerializeField] float perimeterCheckInterval = 2f;
 
+        [Header("Server")]
+        [Tooltip("Cât de des (s) cerem de la server urmele din jur.")]
+        [SerializeField] float fetchInterval = 30f;
+        [Tooltip("Cerem din nou mai devreme dacă te-ai deplasat cu atâția metri.")]
+        [SerializeField] float refetchDistance = 75f;
+        [Tooltip("Câte urme cerem cel mult de la server (din ele se arată cele mai apropiate maxVisibleTraces).")]
+        [SerializeField] int fetchLimit = 100;
+        [Tooltip("Cât așteptăm (s) prima listă de la server înainte să readucem urmele oricum.")]
+        [SerializeField] float firstFetchTimeout = 6f;
+
         [Header("Apariție")]
         [Tooltip("Cât așteptăm (s) după ancorare, ca urma să se așeze, înainte să apară.")]
         [SerializeField] float settleSeconds = 0.5f;
@@ -83,7 +93,12 @@ namespace ThreeTimes.AR
         readonly Dictionary<string, ResolveAnchorOnTerrainPromise> pending = new Dictionary<string, ResolveAnchorOnTerrainPromise>();
         readonly Dictionary<Collider, LiveTrace> byCollider = new Dictionary<Collider, LiveTrace>();
         readonly HashSet<string> failed = new HashSet<string>();
-        List<SavedTrace> saved = new List<SavedTrace>();
+        List<SavedTrace> saved = new List<SavedTrace>();                                  // urmele mele, salvate pe telefon
+        readonly Dictionary<string, SavedTrace> remote = new Dictionary<string, SavedTrace>(); // urmele din jur, de la server
+
+        bool fetching, fetchedOnce, serverWarned;
+        float nextFetch;
+        double lastFetchLat, lastFetchLng;
 
         bool tracesVisible = true;
         bool crowded;       // în rază sunt mai multe urme decât maxVisibleTraces
@@ -103,6 +118,9 @@ namespace ThreeTimes.AR
             mainView.TraceReportRequested += Report;
             mainView.TraceDeleteRequested += Delete;
             mainView.TraceSubmitCheck = PlaceBlockReason;
+            mainView.EnsureMedia = EnsureMedia;
+            mainView.MapTraces = TracesForMap;
+            mainView.VisibleTraces = VisibleTraces;
             mainView.SetTraceCount(saved.Count);
             Debug.Log($"[3Times] Urme salvate: {saved.Count}");
         }
@@ -143,6 +161,8 @@ namespace ThreeTimes.AR
                 }
                 runningSince = -1f;
                 hintShown = false;
+                fetchedOnce = false;
+                serverWarned = false;
                 return;
             }
             if (runningSince < 0f) runningSince = Time.realtimeSinceStartup;
@@ -153,8 +173,9 @@ namespace ThreeTimes.AR
                 if (!simShown)
                 {
                     simShown = true;
-                    mainView.ShowSimulatedTraces(saved);
+                    mainView.ShowSimulatedTraces(AllTraces());
                 }
+                MaybeFetch();
                 return;
             }
 
@@ -166,10 +187,10 @@ namespace ThreeTimes.AR
                     var f = tracker.Fix.Value;
                     float waited = Time.realtimeSinceStartup - runningSince;
                     TestLog.Add($"Precizie pentru urme după {waited:0.0} s · ±{f.HorizontalAccuracy:0.0} m · ±{f.YawAccuracy:0}°");
-                    StartCoroutine(RestoreNearby());
+                    StartCoroutine(RestoreAfterFirstFetch());
                     nextPerimeterCheck = Time.realtimeSinceStartup + perimeterCheckInterval;
                 }
-                else if (!hintShown && saved.Count > 0 && Time.realtimeSinceStartup - runningSince > hintAfterSeconds)
+                else if (!hintShown && saved.Count + remote.Count > 0 && Time.realtimeSinceStartup - runningSince > hintAfterSeconds)
                 {
                     hintShown = true;
                     router.Toast("Urmele apar când localizarea e precisă. Îndreaptă telefonul spre clădiri câteva secunde.", 5f);
@@ -177,6 +198,7 @@ namespace ThreeTimes.AR
                 return;
             }
 
+            MaybeFetch();
             if (Time.realtimeSinceStartup >= nextPerimeterCheck)
             {
                 nextPerimeterCheck = Time.realtimeSinceStartup + perimeterCheckInterval;
@@ -194,7 +216,7 @@ namespace ThreeTimes.AR
         List<(SavedTrace trace, float distance)> Candidates(GeoFix f)
         {
             var list = new List<(SavedTrace trace, float distance)>();
-            foreach (var t in saved)
+            foreach (var t in AllTraces())
             {
                 float d = DistanceMeters(f.Latitude, f.Longitude, t.latitude, t.longitude);
                 if (d <= perimeterMeters) list.Add((t, d));
@@ -215,14 +237,15 @@ namespace ThreeTimes.AR
                 StartCoroutine(SpawnRoutine(candidates[i].trace, false, success => { done++; if (success) ok++; }));
             while (done < shown) yield return null;
 
-            if (saved.Count > 0)
+            int total = saved.Count + remote.Count;
+            if (total > 0)
             {
                 string msg = $"Urme readuse: {ok} din {shown}";
                 if (candidates.Count > shown)
                     msg += $" (cele mai apropiate {maxVisibleTraces}, până la {candidates[shown - 1].distance:0} m)";
                 else
                     msg += $" aflate în {perimeterMeters:0} m";
-                int hidden = saved.Count - shown;
+                int hidden = AllTraces().Count - shown;
                 if (hidden > 0) msg += $" · {hidden} nu se văd";
                 Debug.Log($"[3Times] {msg}");
                 TestLog.Add(msg);
@@ -247,7 +270,7 @@ namespace ThreeTimes.AR
 
             // Distanța urmelor de acum (pentru cele șterse între timp, infinit).
             var distanceOf = new Dictionary<string, float>();
-            foreach (var t in saved)
+            foreach (var t in AllTraces())
                 distanceOf[t.id] = DistanceMeters(f.Latitude, f.Longitude, t.latitude, t.longitude);
             float Dist(string id) => distanceOf.TryGetValue(id, out var d) ? d : float.MaxValue;
 
@@ -350,23 +373,312 @@ namespace ThreeTimes.AR
 
         void Report(SavedTrace trace)
         {
+            if (trace.mine)
+            {
+                router.Toast("Asta e urma ta. O poți șterge, dacă vrei.");
+                return;
+            }
             trace.reported = true;
-            TraceStore.Save(saved);
             Debug.Log($"[3Times] Urmă raportată: {trace.id}");
-            router.Toast("Mulțumim. Raportarea ajunge la moderatori când conectăm serverul.", 4f);
+            if (!ServerSettings.IsConfigured)
+            {
+                router.Toast("Mulțumim. Raportarea ajunge la moderatori când aplicația e legată de server.", 4f);
+                return;
+            }
+            mainView.StartCoroutine(TraceApi.Report(trace.id, null, (ok, error) =>
+            {
+                if (ok)
+                {
+                    TestLog.Add("Urmă raportată");
+                    router.Toast("Mulțumim. Urma a fost trimisă la moderare.", 4f);
+                }
+                else
+                {
+                    trace.reported = false;
+                    router.Toast($"Raportarea nu a mers: {error}", 4f);
+                }
+            }));
         }
 
         void Delete(SavedTrace trace)
         {
+            if (!trace.mine)
+            {
+                router.Toast("Poți șterge doar urmele lăsate de tine.");
+                return;
+            }
             saved.Remove(trace);
+            remote.Remove(trace.id);
             MediaStore.Delete(trace.mediaFile);
+            // Și de pe server; dacă acum nu răspunde, ștergerea se reîncearcă la următoarea legătură.
+            if (ServerSettings.IsConfigured && !TraceStore.PendingDeletes.Contains(trace.id))
+                TraceStore.PendingDeletes.Add(trace.id);
             TraceStore.Save(saved);
+            if (ServerSettings.IsConfigured) mainView.StartCoroutine(DeletePending());
+
             RemoveLive(trace.id);
             mainView.SetTraceCount(saved.Count);
-            if (tracker.Simulated) mainView.ShowSimulatedTraces(saved);
+            if (tracker.Simulated) mainView.ShowSimulatedTraces(AllTraces());
             Debug.Log($"[3Times] Urmă ștearsă: {trace.id}");
             TestLog.Add("Urmă ștearsă");
             router.Toast("Urma a fost ștearsă.");
+        }
+
+        // ---------------------------------------------------------------- server
+
+        /// <summary>Toate urmele cunoscute: ale mele (de pe telefon) și cele din jur (de la server), fără dubluri.</summary>
+        List<SavedTrace> AllTraces()
+        {
+            var all = new List<SavedTrace>(saved);
+            var ids = new HashSet<string>();
+            foreach (var t in saved) ids.Add(t.id);
+            foreach (var t in remote.Values)
+                if (!ids.Contains(t.id)) all.Add(t);
+            return all;
+        }
+
+        bool IsKnown(SavedTrace t) =>
+            saved.Contains(t) || (remote.TryGetValue(t.id, out var r) && r == t);
+
+        /// <summary>Cere de la server urmele din jur, la fiecare fetchInterval secunde sau după o deplasare.</summary>
+        void MaybeFetch()
+        {
+            if (!ServerSettings.IsConfigured || fetching || !tracker.Fix.HasValue) return;
+            var f = tracker.Fix.Value;
+            float now = Time.realtimeSinceStartup;
+            bool moved = fetchedOnce &&
+                         DistanceMeters(lastFetchLat, lastFetchLng, f.Latitude, f.Longitude) > refetchDistance;
+            if (fetchedOnce && now < nextFetch && !moved) return;
+
+            fetching = true;
+            nextFetch = now + fetchInterval;
+            lastFetchLat = f.Latitude;
+            lastFetchLng = f.Longitude;
+            // Pe MainScreenView, nu aici: corutinele de rețea nu trebuie oprite când se șterg urmele din scenă.
+            mainView.StartCoroutine(SyncAndFetch(f.Latitude, f.Longitude));
+        }
+
+        /// <summary>Trimite ce a rămas netrimis, apoi ia urmele din jur.</summary>
+        IEnumerator SyncAndFetch(double lat, double lng)
+        {
+            yield return UploadPending();
+            yield return DeletePending();
+            yield return RemoveDeletedByModerators();
+            yield return TraceApi.Nearby(lat, lng, perimeterMeters, fetchLimit, (list, error) =>
+            {
+                if (list == null)
+                {
+                    if (!serverWarned)
+                    {
+                        serverWarned = true;
+                        TestLog.Add($"Server: {error}");
+                        router.Toast($"{error} Vezi doar urmele tale de pe telefon.", 4f);
+                    }
+                    return;
+                }
+                if (!fetchedOnce || serverWarned) TestLog.Add($"Server: {list.Count} urme în {perimeterMeters:0} m");
+                serverWarned = false;
+                ApplyRemote(list);
+            });
+            fetchedOnce = true;
+            fetching = false;
+        }
+
+        void ApplyRemote(List<SavedTrace> list)
+        {
+            var fresh = new Dictionary<string, SavedTrace>();
+            foreach (var t in list)
+            {
+                t.id = TraceStore.NormalizeId(t.id);
+                // Păstrăm obiectul deja cunoscut (urmele din scenă îl folosesc), doar actualizăm ce se schimbă.
+                if (remote.TryGetValue(t.id, out var known))
+                {
+                    known.reported = t.reported;
+                    fresh[t.id] = known;
+                }
+                else
+                {
+                    fresh[t.id] = t;
+                }
+                // O urmă de-a mea pe care serverul o are deja: e trimisă.
+                if (t.mine)
+                {
+                    var mineLocal = saved.Find(x => x.id == t.id);
+                    if (mineLocal != null && !mineLocal.synced)
+                    {
+                        mineLocal.synced = true;
+                        TraceStore.Save(saved);
+                    }
+                }
+            }
+            remote.Clear();
+            foreach (var pair in fresh) remote[pair.Key] = pair.Value;
+            if (tracker.Simulated && simShown) mainView.ShowSimulatedTraces(AllTraces());
+        }
+
+        IEnumerator RestoreAfterFirstFetch()
+        {
+            float started = Time.realtimeSinceStartup;
+            MaybeFetch();
+            while (ServerSettings.IsConfigured && !fetchedOnce &&
+                   Time.realtimeSinceStartup - started < firstFetchTimeout)
+                yield return null;
+            yield return RestoreNearby();
+        }
+
+        IEnumerator UploadPending()
+        {
+            foreach (var t in saved.ToArray())
+                if (!t.synced && string.IsNullOrEmpty(t.syncError))
+                    yield return Upload(t);
+        }
+
+        IEnumerator Upload(SavedTrace t)
+        {
+            if (!ServerSettings.IsConfigured || t.synced) yield break;
+            yield return TraceApi.Create(t, (server, error, permanent, refused) =>
+            {
+                if (refused)
+                {
+                    // Moderarea n-a acceptat textul (de obicei prins deja în foaie; aici, dacă urma a plecat fără verificare).
+                    RemoveRefused(t, error);
+                }
+                else if (server != null)
+                {
+                    t.synced = true;
+                    t.hasMedia = server.hasMedia;
+                    TraceStore.Save(saved);
+                    TestLog.Add("Urmă trimisă la server");
+                }
+                else if (permanent)
+                {
+                    t.syncError = error;
+                    TraceStore.Save(saved);
+                    TestLog.Add($"Serverul a refuzat urma: {error}");
+                }
+                else
+                {
+                    Debug.Log($"[3Times] Urma rămâne de trimis: {error}");
+                }
+            });
+        }
+
+        /// <summary>O urmă refuzată de moderare nu rămâne nici pe telefon: o scoatem și îi spunem utilizatorului de ce.</summary>
+        void RemoveRefused(SavedTrace t, string reason)
+        {
+            RemoveLocal(new List<SavedTrace> { t });
+            TestLog.Add($"Urmă refuzată de moderare: {reason}");
+            router.Toast($"Urma ta nu a fost publicată. {reason}", 6f);
+        }
+
+        /// <summary>
+        /// Urmele mele trimise deja la server, dar care nu mai există acolo, au fost șterse de moderatori (admin):
+        /// le scoatem și de pe telefon. Dacă serverul nu răspunde, nu ștergem nimic.
+        /// </summary>
+        IEnumerator RemoveDeletedByModerators()
+        {
+            if (!ServerSettings.IsConfigured) yield break;
+            HashSet<string> onServer = null;
+            yield return TraceApi.MyIds(ids => onServer = ids);
+            if (onServer == null) yield break;
+
+            var gone = saved.FindAll(t => t.synced && !onServer.Contains(TraceStore.NormalizeId(t.id)));
+            if (gone.Count == 0) yield break;
+            RemoveLocal(gone);
+            TestLog.Add($"Urme șterse de moderatori: {gone.Count}");
+            router.Toast(gone.Count == 1
+                ? "Una dintre urmele tale a fost ștearsă de moderatori."
+                : $"{gone.Count} dintre urmele tale au fost șterse de moderatori.", 5f);
+        }
+
+        void RemoveLocal(List<SavedTrace> traces)
+        {
+            foreach (var t in traces)
+            {
+                saved.Remove(t);
+                remote.Remove(t.id);
+                MediaStore.Delete(t.mediaFile);
+                RemoveLive(t.id);
+            }
+            TraceStore.Save(saved);
+            mainView.SetTraceCount(saved.Count);
+            if (tracker.Simulated) mainView.ShowSimulatedTraces(AllTraces());
+        }
+
+        IEnumerator DeletePending()
+        {
+            foreach (var id in TraceStore.PendingDeletes.ToArray())
+            {
+                bool done = false;
+                yield return TraceApi.Delete(id, ok => done = ok);
+                if (done)
+                {
+                    TraceStore.PendingDeletes.Remove(id);
+                    TraceStore.Save(saved);
+                }
+            }
+        }
+
+        /// <summary>Urmele care se văd acum (în AR sau, în Editor, peste ilustrație), pentru cartea poștală.</summary>
+        List<SavedTrace> VisibleTraces()
+        {
+            if (tracker.Simulated) return AllTraces();
+            var list = new List<SavedTrace>();
+            foreach (var l in live.Values) list.Add(l.trace);
+            return list;
+        }
+
+        /// <summary>
+        /// Urmele pentru hartă, în jurul unui punct: ale mele de pe telefon plus cele de pe server.
+        /// Fără server (sau dacă nu răspunde), doar ale mele.
+        /// </summary>
+        void TracesForMap(double lat, double lng, float radius, Action<List<SavedTrace>> done)
+        {
+            var mineNear = saved.FindAll(t => DistanceMeters(lat, lng, t.latitude, t.longitude) <= radius);
+            if (!ServerSettings.IsConfigured)
+            {
+                done(mineNear);
+                return;
+            }
+            mainView.StartCoroutine(TraceApi.Nearby(lat, lng, radius, 200, (list, error) =>
+            {
+                if (list == null)
+                {
+                    done(mineNear);
+                    return;
+                }
+                var all = new List<SavedTrace>(mineNear);
+                var ids = new HashSet<string>();
+                foreach (var t in mineNear) ids.Add(t.id);
+                foreach (var t in list)
+                {
+                    t.id = TraceStore.NormalizeId(t.id);
+                    if (ids.Contains(t.id)) continue;
+                    // Dacă urma e deja cunoscută (din AR), folosim același obiect.
+                    all.Add(remote.TryGetValue(t.id, out var known) ? known : t);
+                }
+                done(all);
+            }));
+        }
+
+        /// <summary>
+        /// Înainte să se deschidă o urmă cu poză sau voce de la altcineva, îi descărcăm fișierul.
+        /// </summary>
+        void EnsureMedia(SavedTrace trace, Action open)
+        {
+            bool needsFile = trace.type != "TEXT" && !MediaStore.Exists(trace.mediaFile);
+            if (!needsFile || !trace.hasMedia || !ServerSettings.IsConfigured)
+            {
+                open();
+                return;
+            }
+            router.Toast("Se încarcă urma…", 1.5f);
+            mainView.StartCoroutine(TraceApi.DownloadMedia(trace, file =>
+            {
+                if (file != null) trace.mediaFile = file;
+                else router.Toast("Fișierul urmei nu s-a putut descărca.");
+                open();
+            }));
         }
 
         // ---------------------------------------------------------------- plasare
@@ -382,15 +694,22 @@ namespace ThreeTimes.AR
             }
 
             var fix = tracker.Fix.Value;
+            var look = draft.Look ?? TraceStyle.Legacy("bucurie");
             var trace = new SavedTrace
             {
-                id = Guid.NewGuid().ToString("N"),
+                id = Guid.NewGuid().ToString(),
                 type = string.IsNullOrEmpty(draft.Type) ? "TEXT" : draft.Type,
                 content = draft.Text ?? "",
                 mediaFile = draft.MediaFile,
                 photoSource = draft.PhotoSource,
                 durationSeconds = draft.DurationSeconds,
-                emotion = EmotionCode(draft.Emotion),
+                emotion = look.emotion,
+                shape = look.shape,
+                color = look.color,
+                accentColor = look.accentColor,
+                petals = look.petals,
+                sharpness = look.sharpness,
+                motion = look.motion,
                 intensity = (draft.Intensity + 1) / 3f,
                 latitude = fix.Latitude,
                 longitude = fix.Longitude,
@@ -436,10 +755,13 @@ namespace ThreeTimes.AR
 
         void Commit(SavedTrace trace)
         {
+            trace.mine = true;
+            trace.synced = false;
             saved.Add(trace);
             TraceStore.Save(saved);
             mainView.SetTraceCount(saved.Count);
-            if (tracker.Simulated) mainView.ShowSimulatedTraces(saved);
+            if (tracker.Simulated) mainView.ShowSimulatedTraces(AllTraces());
+            if (ServerSettings.IsConfigured) mainView.StartCoroutine(Upload(trace));
             string kind = trace.type == "PHOTO" ? "poză, " : trace.type == "VOICE" ? "voce, " : "";
             TestLog.Add($"Urmă lăsată ({kind}{TraceLook.Name(trace.emotion)}, nivel {TraceLook.Level(trace.intensity)}) · " +
                         $"±{trace.accuracyMeters:0.0} m · ±{trace.yawAccuracyDegrees:0}° · {trace.latitude:F6}, {trace.longitude:F6}");
@@ -500,7 +822,7 @@ namespace ThreeTimes.AR
             }
 
             // Între timp camera s-a oprit sau urma a fost ștearsă.
-            if (!tracker.Running || (!isNew && !saved.Contains(t)))
+            if (!tracker.Running || (!isNew && !IsKnown(t)))
             {
                 Destroy(anchor);
                 done?.Invoke(false);
@@ -524,9 +846,9 @@ namespace ThreeTimes.AR
             if (particleMaterial != null)
             {
                 // Forma din particule: floare, picătură sau semilună, după emoție și intensitate.
-                int level = TraceLook.Level(t.intensity);
-                TraceShapeBuilder.Build(TraceLook.Key(t.emotion), level, t.id, particleMaterial, appear, t.type);
-                touch.radius = TraceShapeBuilder.Diameter(level) * 0.6f;
+                var style = TraceStyle.Of(t);
+                TraceShapeBuilder.Build(style, t.id, particleMaterial, appear, t.type);
+                touch.radius = TraceShapeBuilder.Diameter(style.Level) * 0.6f;
             }
             else if (markerPrefab != null)
             {
@@ -535,7 +857,7 @@ namespace ThreeTimes.AR
                 float size = Mathf.Lerp(0.7f, 1.3f, t.intensity);
                 marker.transform.localScale = Vector3.one * size;
                 var block = new MaterialPropertyBlock();
-                block.SetColor(BaseColor, EmotionColor(t.emotion));
+                block.SetColor(BaseColor, TraceStyle.Of(t).Color);
                 foreach (var r in marker.GetComponentsInChildren<Renderer>())
                     r.SetPropertyBlock(block);
                 touch.radius = 0.35f * size;
@@ -602,23 +924,11 @@ namespace ThreeTimes.AR
             return (float)(earthRadius * Math.Sqrt(dLat * dLat + dLon * dLon));
         }
 
-        static string EmotionCode(Emotion e) =>
-            e == Emotion.Sadness ? "SADNESS" : e == Emotion.Longing ? "LONGING" : "JOY";
-
-        static Color EmotionColor(string code)
-        {
-            switch (code)
-            {
-                case "SADNESS": return new Color(0.357f, 0.584f, 0.902f); // #5B95E6
-                case "LONGING": return new Color(0.612f, 0.471f, 0.890f); // #9C78E3
-                default: return new Color(0.961f, 0.722f, 0.239f);        // #F5B83D
-            }
-        }
 
         // ---------------------------------------------------------------- previzualizare (doar Editor)
 
         /// <summary>
-        /// În Play, în Editor: arată cele nouă forme (3 emoții × 3 intensități) și, dedesubt, cele trei tipuri
+        /// În Play, în Editor: arată cele 12 forme de bază și, dedesubt, cele trei tipuri
         /// (text, poză, voce) în fața unei camere,
         /// fără interfață, ca să le putem verifica fără telefon. Meniu: Tools → 3Times → Arată formele 3D.
         /// </summary>
@@ -640,16 +950,21 @@ namespace ThreeTimes.AR
             float distance = Mathf.Max(2.75f / tanHalf, 1.95f / (tanHalf * Mathf.Max(0.1f, cam.aspect)));
             cam.transform.position = new Vector3(0f, 0f, 4.6f - distance);
 
-            string[] keys = { "joy", "sadness", "longing" };
-            for (int e = 0; e < 3; e++)
-                for (int level = 0; level < 3; level++)
-                {
-                    var holder = new GameObject($"Preview {keys[e]} {level}");
-                    holder.transform.position = new Vector3((level - 1) * 1.1f, 1.6f - e * 1.05f, 4.6f);
-                    TraceShapeBuilder.Build(keys[e], level, $"preview-{e}-{level}", particleMaterial, holder.transform);
-                }
+            // Cele 12 forme de bază (nivel „mediu”), câte 4 pe rând, fiecare în altă culoare.
+            for (int i = 0; i < TraceStyle.Shapes.Length; i++)
+            {
+                var look = TraceStyle.FromWord("preview-" + i);
+                look.shape = TraceStyle.Shapes[i];
+                look.petals = 6;
+                look.sharpness = 0.4f;
+                look.intensity = 1;
+                var holder = new GameObject($"Preview {look.shape}");
+                holder.transform.position = new Vector3((i % 4 - 1.5f) * 1.1f, 1.6f - (i / 4) * 1.05f, 4.6f);
+                TraceShapeBuilder.Build(TraceStyle.Of(look), $"preview-{i}", particleMaterial, holder.transform);
+            }
 
-            // Ultimul rând: cele trei tipuri de urmă (text, poză, voce), la intensitatea „mediu”.
+            // Ultimul rând: cele trei tipuri de urmă (text, poză, voce).
+            string[] keys = { "joy", "sadness", "longing" };
             string[] types = { "TEXT", "PHOTO", "VOICE" };
             for (int i = 0; i < 3; i++)
             {
@@ -664,12 +979,19 @@ namespace ThreeTimes.AR
         void ClearAll()
         {
             int count = saved.Count;
-            foreach (var t in saved) MediaStore.Delete(t.mediaFile);
+            foreach (var t in saved)
+            {
+                MediaStore.Delete(t.mediaFile);
+                remote.Remove(t.id);
+                if (ServerSettings.IsConfigured && !TraceStore.PendingDeletes.Contains(t.id))
+                    TraceStore.PendingDeletes.Add(t.id);
+            }
             saved.Clear();
             TraceStore.Save(saved);
+            if (ServerSettings.IsConfigured) mainView.StartCoroutine(DeletePending());
             DestroyAll();
             mainView.SetTraceCount(0);
-            if (tracker.Simulated) mainView.ShowSimulatedTraces(saved);
+            if (tracker.Simulated) mainView.ShowSimulatedTraces(AllTraces());
             Debug.Log($"[3Times] Urme șterse: {count}");
             if (count > 0) TestLog.Add($"Toate urmele de test șterse ({count})");
             router.Toast(count == 0 ? "Nu ai urme de test." : $"Am șters {count} urme de test.");

@@ -16,14 +16,11 @@ namespace ThreeTimes.UI
         /// Un element de mărimea formei (size × size), poziționat absolut, de pus ÎNAINTE de formă
         /// în același părinte. Pentru text întoarce null.
         /// </summary>
-        public static VisualElement Create(string traceType, string emotionKey, float size)
+        public static VisualElement Create(string traceType, Color tint, float size)
         {
             if (traceType != "PHOTO" && traceType != "VOICE") return null;
 
             var root = Box(0f, 0f, size, size);
-            Color tint = emotionKey == "sadness" ? new Color(0.357f, 0.584f, 0.902f)
-                       : emotionKey == "longing" ? new Color(0.612f, 0.471f, 0.890f)
-                       : new Color(0.910f, 0.588f, 0.102f);
 
             if (traceType == "PHOTO")
             {

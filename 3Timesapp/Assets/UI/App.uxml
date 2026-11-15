@@ -217,9 +217,21 @@
                     <ui:Label text="Jurnal de test" class="list-item__text" picking-mode="Ignore" />
                     <ui:VisualElement class="icon icon--chevron" picking-mode="Ignore" />
                 </ui:Button>
+                <ui:Button name="menu-postcards" class="list-item">
+                    <ui:Label text="Cărțile mele poștale" class="list-item__text" picking-mode="Ignore" />
+                    <ui:VisualElement class="icon icon--chevron" picking-mode="Ignore" />
+                </ui:Button>
                 <ui:Button name="menu-clear-traces" class="list-item">
                     <ui:Label text="Șterge urmele mele de test" class="list-item__text" picking-mode="Ignore" />
                 </ui:Button>
+
+                <!-- Serverul urmelor (la testele cu hotspot: IP-ul laptopului, de ex. 192.168.43.57) -->
+                <ui:Label text="Server" class="field-label server-label" />
+                <ui:VisualElement class="row">
+                    <ui:TextField name="server-url" placeholder-text="ex. 192.168.43.57" class="server-input grow" />
+                    <ui:Button name="server-save" text="Verifică" class="pill-btn gap-left" />
+                </ui:VisualElement>
+                <ui:Label name="server-status" text="" class="caption server-status" />
             </ui:VisualElement>
         </ui:VisualElement>
 
@@ -236,10 +248,71 @@
                     <ui:Label text="Aplicație de realitate augmentată care arată povestea locurilor: trecut, prezent și viitor. Prima versiune acoperă Piața Victoriei din Timișoara, de la Operă până la Catedrală." class="body section" />
                     <ui:Label text="Surse și licențe" class="title" />
                     <ui:Label text="Sursa și licența fiecărei fotografii și înregistrări istorice vor apărea aici, odată cu conținutul." class="body section" />
+                    <ui:Label text="Harta: © OpenStreetMap contributors (openstreetmap.org/copyright), © CARTO." class="caption section" />
                     <ui:Label text="Confidențialitate" class="title" />
                     <ui:Label text="Aplicația folosește camera și locația telefonului. Imaginile camerei nu se salvează. Urmele pe care le lași păstrează locul în care le-ai lăsat și pot fi șterse oricând, la cerere." class="body section" />
+                    <ui:Label text="Ca să-ți propunem emoția, textul urmei (doar textul, fără locul ei sau alte date) e trimis serviciului Google Gemini. Emoția o poți schimba oricând." class="body section" />
                     <ui:Label text="Această aplicație folosește Google Play Services for AR (ARCore), oferit de Google LLC și guvernat de Politica de confidențialitate Google." class="caption section" />
                     <ui:Label text="Proiect Codesign Hardware/Software, Universitatea Politehnica Timișoara, 2026–2027." class="caption" />
+                </ui:ScrollView>
+            </ui:VisualElement>
+        </ui:VisualElement>
+
+        <!-- Harta urmelor (fundal CARTO Positron; cheia în Assets/Resources/MapConfig.json, local) -->
+        <ui:VisualElement name="screen-map" class="screen screen--paper hidden">
+            <ui:VisualElement name="map-view" class="fill map-view">
+                <ui:VisualElement name="map-tiles" class="fill" picking-mode="Ignore" />
+                <ui:VisualElement name="map-markers" class="fill" picking-mode="Ignore" />
+                <ui:VisualElement name="map-me" class="map-me hidden" picking-mode="Ignore" />
+            </ui:VisualElement>
+            <ui:VisualElement class="fill safe" picking-mode="Ignore">
+                <ui:VisualElement class="topbar" picking-mode="Ignore">
+                    <ui:Button name="map-back" class="round-btn">
+                        <ui:VisualElement class="icon icon--back" picking-mode="Ignore" />
+                    </ui:Button>
+                    <ui:Label name="map-status" text="" class="map-status" picking-mode="Ignore" />
+                    <ui:VisualElement class="topbar-spacer" picking-mode="Ignore" />
+                </ui:VisualElement>
+                <ui:VisualElement class="grow" picking-mode="Ignore" />
+                <ui:VisualElement class="map-controls" picking-mode="Ignore">
+                    <ui:Button name="map-zoom-in" text="+" class="round-btn map-control" />
+                    <ui:Button name="map-zoom-out" text="−" class="round-btn map-control" />
+                    <ui:Button name="map-locate" class="round-btn map-control">
+                        <ui:VisualElement class="map-locate-dot" picking-mode="Ignore" />
+                    </ui:Button>
+                </ui:VisualElement>
+                <ui:Label text="© OpenStreetMap contributors, © CARTO" class="map-attribution" picking-mode="Ignore" />
+                <ui:VisualElement name="map-card" class="map-card hidden">
+                    <ui:VisualElement class="row">
+                        <ui:VisualElement name="map-card-shape" class="map-card__holder" picking-mode="Ignore" />
+                        <ui:VisualElement class="grow map-card__text" picking-mode="Ignore">
+                            <ui:Label name="map-card-title" text="bucurie" class="detail-emotion" />
+                            <ui:Label name="map-card-kind" text="" class="caption" />
+                        </ui:VisualElement>
+                        <ui:Button name="map-card-close" class="round-btn">
+                            <ui:VisualElement class="icon icon--close" picking-mode="Ignore" />
+                        </ui:Button>
+                    </ui:VisualElement>
+                    <ui:Label name="map-card-distance" text="" class="body map-card__distance" />
+                    <ui:Label name="map-card-hint" text="" class="caption" />
+                    <ui:Button name="map-card-open" text="Deschide" class="btn btn--primary map-card__open hidden" />
+                </ui:VisualElement>
+            </ui:VisualElement>
+        </ui:VisualElement>
+
+        <!-- Cărțile mele poștale -->
+        <ui:VisualElement name="screen-postcards" class="screen screen--paper hidden">
+            <ui:VisualElement class="safe">
+                <ui:VisualElement class="topbar">
+                    <ui:Button name="postcards-back" class="round-btn">
+                        <ui:VisualElement class="icon icon--back" picking-mode="Ignore" />
+                    </ui:Button>
+                    <ui:Label text="Cărțile mele poștale" class="title" />
+                    <ui:VisualElement class="topbar-spacer" />
+                </ui:VisualElement>
+                <ui:Label name="postcards-empty" text="Nicio carte poștală încă. Pornește camera și apasă butonul din dreapta jos." class="caption postcards-empty" />
+                <ui:ScrollView class="grow">
+                    <ui:VisualElement name="postcards-grid" class="postcards-grid" />
                 </ui:ScrollView>
             </ui:VisualElement>
         </ui:VisualElement>
@@ -314,18 +387,24 @@
 
                 <ui:Label text="Cum te simți?" class="field-label" />
                 <ui:VisualElement class="chips">
-                    <ui:Button name="chip-joy" class="chip chip--joy chip--active">
-                        <ui:VisualElement class="chip__icon shape--joy-1" picking-mode="Ignore" />
+                    <ui:Button name="chip-0" class="chip">
+                        <ui:VisualElement class="chip__icon" picking-mode="Ignore" />
                         <ui:Label text="bucurie" class="chip__label" picking-mode="Ignore" />
                     </ui:Button>
-                    <ui:Button name="chip-sadness" class="chip chip--sadness">
-                        <ui:VisualElement class="chip__icon shape--sadness-1" picking-mode="Ignore" />
+                    <ui:Button name="chip-1" class="chip">
+                        <ui:VisualElement class="chip__icon" picking-mode="Ignore" />
                         <ui:Label text="tristețe" class="chip__label" picking-mode="Ignore" />
                     </ui:Button>
-                    <ui:Button name="chip-longing" class="chip chip--longing">
-                        <ui:VisualElement class="chip__icon shape--longing-1" picking-mode="Ignore" />
+                    <ui:Button name="chip-2" class="chip">
+                        <ui:VisualElement class="chip__icon" picking-mode="Ignore" />
                         <ui:Label text="dor" class="chip__label" picking-mode="Ignore" />
                     </ui:Button>
+                </ui:VisualElement>
+
+                <!-- Altă emoție, scrisă de utilizator; AI-ul îi alege forma -->
+                <ui:VisualElement class="row emotion-custom">
+                    <ui:TextField name="emotion-custom" max-length="30" placeholder-text="Altă emoție…" class="server-input grow" />
+                    <ui:Button name="emotion-custom-apply" text="Alege" class="pill-btn gap-left" />
                 </ui:VisualElement>
 
                 <ui:Label name="trace-suggestion" text="Scrie mesajul și îți propunem o emoție." class="caption suggestion" />
@@ -364,6 +443,45 @@
                     <ui:Button name="detail-close" text="Închide" class="btn btn--dark grow gap-left" />
                 </ui:VisualElement>
                 <ui:Button name="detail-delete" text="Șterge urma mea" class="btn btn--ghost" />
+            </ui:VisualElement>
+        </ui:VisualElement>
+
+        <!-- Time postcard: cartea poștală (rama vie, la creare; imaginea salvată, din colecție) -->
+        <ui:VisualElement name="postcard-overlay" class="fill hidden">
+            <ui:VisualElement class="fill postcard-dim" />
+            <ui:VisualElement class="fill safe postcard-layout" picking-mode="Ignore">
+                <ui:VisualElement class="topbar" picking-mode="Ignore">
+                    <ui:VisualElement class="topbar-spacer" picking-mode="Ignore" />
+                    <ui:Button name="postcard-close" class="round-btn">
+                        <ui:VisualElement class="icon icon--close" picking-mode="Ignore" />
+                    </ui:Button>
+                </ui:VisualElement>
+                <ui:VisualElement class="grow center" picking-mode="Ignore">
+                    <ui:VisualElement name="postcard-card" class="postcard-card">
+                        <ui:VisualElement name="postcard-photo" class="postcard-photo" />
+                        <ui:VisualElement class="row postcard-caption">
+                            <ui:VisualElement class="grow">
+                                <ui:Label name="postcard-word" text="acum" class="postcard-word" />
+                                <ui:Label name="postcard-place" text="" class="postcard-meta" />
+                                <ui:Label name="postcard-date" text="" class="postcard-meta" />
+                            </ui:VisualElement>
+                            <ui:VisualElement class="postcard-right">
+                                <ui:VisualElement name="postcard-emotions" class="row postcard-emotions" />
+                                <ui:Label name="postcard-emotions-label" text="" class="postcard-meta postcard-count" />
+                                <ui:VisualElement class="logo postcard-logo">
+                                    <ui:Label text="3" class="logo__three" />
+                                    <ui:Label text="Times" class="logo__times" />
+                                </ui:VisualElement>
+                            </ui:VisualElement>
+                        </ui:VisualElement>
+                    </ui:VisualElement>
+                    <ui:VisualElement name="postcard-saved" class="postcard-saved hidden" />
+                </ui:VisualElement>
+                <ui:VisualElement class="row postcard-actions">
+                    <ui:Button name="postcard-share" text="Trimite" class="btn btn--primary grow" />
+                    <ui:Button name="postcard-save" text="În galerie" class="btn btn--secondary grow gap-left" />
+                </ui:VisualElement>
+                <ui:Button name="postcard-delete" text="Șterge din aplicație" class="btn btn--ghost hidden" />
             </ui:VisualElement>
         </ui:VisualElement>
 

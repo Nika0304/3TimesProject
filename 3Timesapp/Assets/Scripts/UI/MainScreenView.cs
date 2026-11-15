@@ -53,6 +53,23 @@ namespace ThreeTimes.UI
 
         ThreeTimes.Media.VoicePlayer voicePlayer;
 
+        /// <summary>
+        /// Înainte de deschiderea unei urme: descarcă poza sau vocea, dacă e de la altcineva.
+        /// Primește urma și ce trebuie făcut după. Îl setează TraceManager.
+        /// </summary>
+        public Action<ThreeTimes.Data.SavedTrace, Action> EnsureMedia { get; set; }
+
+        /// <summary>Urmele din jurul unui punct, pentru hartă (lat, lng, rază în metri, rezultat). Îl setează TraceManager.</summary>
+        public Action<double, double, float, Action<List<ThreeTimes.Data.SavedTrace>>> MapTraces { get; set; }
+
+        MapScreenView map;
+        PostcardView postcard;
+
+        /// <summary>Urmele care se văd acum în jur (pentru cartea poștală). Îl setează TraceManager.</summary>
+        public Func<List<ThreeTimes.Data.SavedTrace>> VisibleTraces { get; set; }
+        TextField serverField;
+        Label serverStatus;
+
         VisualElement screenLog;
         Label logText;
         VisualElement screenMain, screenMenu, screenAbout, pastTint, cameraPrompt, simTraces;
@@ -142,6 +159,12 @@ namespace ThreeTimes.UI
             root.Q<Button>("menu-close").clicked += CloseMenu;
             root.Q<Button>("menu-account").clicked += () => router.Toast("Contul (opțional) vine într-o etapă următoare.");
             root.Q<Button>("menu-about").clicked += OpenAbout;
+
+            // Serverul: adresa se poate schimba (la hotspot, IP-ul laptopului)
+            serverField = root.Q<TextField>("server-url");
+            serverStatus = root.Q<Label>("server-status");
+            serverField.value = ThreeTimes.Data.ServerSettings.Url;
+            root.Q<Button>("server-save").clicked += SaveServer;
             // Jurnalul de test
             screenLog = root.Q("screen-log");
             logText = root.Q<Label>("log-text");
@@ -194,8 +217,26 @@ namespace ThreeTimes.UI
 
             // Acțiuni
             actionPrimary.clicked += OnPrimaryAction;
-            root.Q<Button>("action-map").clicked += () => Raise(MapRequested, "Harta vine într-o etapă următoare.");
-            root.Q<Button>("action-postcard").clicked += () => Raise(PostcardRequested, "Time postcard vine într-o etapă următoare.");
+            map = new MapScreenView(root, router, this, tracker,
+                                    (lat, lng, radius, done) =>
+                                    {
+                                        if (MapTraces != null) MapTraces(lat, lng, radius, done);
+                                        else done(new List<ThreeTimes.Data.SavedTrace>());
+                                    },
+                                    OpenTrace);
+            root.Q<Button>("action-map").clicked += () => { map.Open(); MapRequested?.Invoke(); };
+            postcard = new PostcardView(root, router, this, tracker, () => VisibleTraces?.Invoke());
+            root.Q<Button>("action-postcard").clicked += () =>
+            {
+                if (!CameraOn)
+                {
+                    router.Toast("Pornește camera ca să faci o carte poștală din ce vezi.");
+                    return;
+                }
+                postcard.Create(Look(Mode).Word);
+                PostcardRequested?.Invoke();
+            };
+            root.Q<Button>("menu-postcards").clicked += () => { CloseMenu(); postcard.OpenList(); };
 
             // Cursorul timpului: tragere pe bară + atingere pe etichete
             slider.RegisterCallback<PointerDownEvent>(OnPointerDown);
@@ -219,11 +260,37 @@ namespace ThreeTimes.UI
             var keyboard = Keyboard.current;
             if (!initialized || keyboard == null || !keyboard.escapeKey.wasPressedThisFrame) return;
             if (traceDetail.IsOpen) traceDetail.Close();
+            else if (postcard.IsOpen) postcard.Close();
+            else if (postcard.ListOpen) postcard.CloseList();
+            else if (map.IsOpen) map.Back();
             else if (traceSheet.IsOpen) { if (!traceSheet.HandleBack()) traceSheet.Close(); }
             else if (IsVisible(screenLog)) UIRouter.SetVisible(screenLog, false);
             else if (IsVisible(screenAbout)) CloseAbout();
             else if (IsVisible(screenMenu)) CloseMenu();
             else if (Mode != TimeMode.Present) Select(TimeMode.Present);
+        }
+
+        // ---------------------------------------------------------------- server
+
+        void SaveServer()
+        {
+            string url = ThreeTimes.Data.ServerSettings.Normalize(serverField.value);
+            serverField.Blur();
+            ThreeTimes.Data.ServerSettings.Url = url;
+            serverField.value = url;
+            if (url.Length == 0)
+            {
+                serverStatus.text = "Fără server: vezi doar urmele tale, salvate pe telefon.";
+                return;
+            }
+            serverStatus.text = "Verific…";
+            StartCoroutine(ThreeTimes.Data.TraceApi.Health(url, ok =>
+            {
+                serverStatus.text = ok
+                    ? "Conectat. Urmele se trimit și se primesc de la acest server."
+                    : "Serverul nu răspunde. Verifică adresa, hotspotul și dacă serverul e pornit.";
+                ThreeTimes.Data.TestLog.Add($"Server {url}: {(ok ? "conectat" : "nu răspunde")}");
+            }));
         }
 
         // ---------------------------------------------------------------- stare localizare
@@ -248,7 +315,11 @@ namespace ThreeTimes.UI
         }
 
         /// <summary>Deschide „ecranul unei urme”.</summary>
-        public void OpenTrace(ThreeTimes.Data.SavedTrace trace) => traceDetail.Open(trace);
+        public void OpenTrace(ThreeTimes.Data.SavedTrace trace)
+        {
+            if (EnsureMedia != null) EnsureMedia(trace, () => traceDetail.Open(trace));
+            else traceDetail.Open(trace);
+        }
 
         /// <summary>
         /// Doar în simulare (Editor): desenează urmele salvate peste ilustrația pieței,
@@ -265,8 +336,8 @@ namespace ThreeTimes.UI
                 float x = 12 + Mathf.Abs(hash % 76);          // 12–88 % din lățime
                 float y = 32 + Mathf.Abs((hash / 97) % 26);   // 32–58 % din înălțime
 
-                int level = TraceLook.Level(t.intensity);
-                string key = TraceLook.Key(t.emotion);
+                var style = ThreeTimes.Data.TraceStyle.Of(t);
+                int level = style.Level;
                 float size = 44 + level * 22;
 
                 var item = new VisualElement();
@@ -280,12 +351,12 @@ namespace ThreeTimes.UI
                 var holder = new VisualElement { pickingMode = PickingMode.Ignore };
                 holder.style.width = size;
                 holder.style.height = size;
-                var backdrop = TraceTypeBackdrop.Create(t.type, key, size);
+                var backdrop = TraceTypeBackdrop.Create(t.type, style.Color, size);
                 if (backdrop != null) holder.Add(backdrop);
 
                 var shape = new VisualElement { pickingMode = PickingMode.Ignore };
                 shape.AddToClassList("sim-trace__shape");
-                shape.AddToClassList($"shape--{key}-{level}");
+                shape.style.backgroundImage = new StyleBackground(TraceIcon.Get(style));
                 shape.style.position = Position.Absolute;
                 shape.style.left = 0;
                 shape.style.top = 0;
@@ -294,7 +365,7 @@ namespace ThreeTimes.UI
                 holder.Add(shape);
                 item.Add(holder);
 
-                var label = new Label(TraceLook.Name(t.emotion)) { pickingMode = PickingMode.Ignore };
+                var label = new Label(style.Label) { pickingMode = PickingMode.Ignore };
                 label.AddToClassList("sim-trace__label");
                 label.style.marginTop = TraceTypeBackdrop.ExtraBelow(t.type, size);
                 item.Add(label);
@@ -370,7 +441,12 @@ namespace ThreeTimes.UI
             else router.Toast(fallbackMessage);
         }
 
-        void OpenMenu() => UIRouter.SetVisible(screenMenu, true);
+        void OpenMenu()
+        {
+            serverField.value = ThreeTimes.Data.ServerSettings.Url;
+            serverStatus.text = "";
+            UIRouter.SetVisible(screenMenu, true);
+        }
         void CloseMenu() => UIRouter.SetVisible(screenMenu, false);
         void OpenAbout() => UIRouter.SetVisible(screenAbout, true);
         void CloseAbout() => UIRouter.SetVisible(screenAbout, false);

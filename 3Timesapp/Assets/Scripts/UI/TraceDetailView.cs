@@ -17,7 +17,7 @@ namespace ThreeTimes.UI
         readonly UIRouter router;
         readonly VisualElement overlay, card, shape, dim;
         readonly Label emotionLabel, textLabel, metaLabel;
-        readonly Button reportButton, playButton;
+        readonly Button reportButton, playButton, deleteButton;
         readonly VisualElement photo, voiceRow;
         readonly Label durationLabel;
         readonly VoicePlayer player;
@@ -58,7 +58,8 @@ namespace ThreeTimes.UI
                 Close();
                 ReportRequested?.Invoke(trace);
             };
-            root.Q<Button>("detail-delete").clicked += () =>
+            deleteButton = root.Q<Button>("detail-delete");
+            deleteButton.clicked += () =>
             {
                 if (current == null) return;
                 var trace = current;
@@ -73,15 +74,16 @@ namespace ThreeTimes.UI
             current = trace;
             IsOpen = true;
 
-            string key = TraceLook.Key(trace.emotion);
-            int level = TraceLook.Level(trace.intensity);
+            // Forma și culoarea emoției, așa cum le-a ales AI-ul (sau cele vechi, pentru urmele de dinainte).
+            var style = TraceStyle.Of(trace);
             foreach (var k in TraceLook.Keys)
             {
-                for (int i = 0; i < 3; i++)
-                    shape.EnableInClassList($"shape--{k}-{i}", k == key && i == level);
-                emotionLabel.EnableInClassList("detail-emotion--" + k, k == key);
+                for (int i = 0; i < 3; i++) shape.RemoveFromClassList($"shape--{k}-{i}");
+                emotionLabel.RemoveFromClassList("detail-emotion--" + k);
             }
-            emotionLabel.text = TraceLook.Name(trace.emotion);
+            shape.style.backgroundImage = new StyleBackground(TraceIcon.Get(style));
+            emotionLabel.style.color = style.Ink;
+            emotionLabel.text = style.Label;
             textLabel.text = trace.content ?? "";
 
             // Poza
@@ -102,7 +104,10 @@ namespace ThreeTimes.UI
                 textLabel.text = (textLabel.text + "\n(fișierul urmei lipsește de pe telefon)").Trim();
             UIRouter.SetVisible(textLabel, textLabel.text.Length > 0);
 
-            metaLabel.text = "Lăsată de tine, " + When(trace.createdAt);
+            metaLabel.text = (trace.mine ? "Lăsată de tine, " : "Lăsată ") + When(trace.createdAt);
+            // Urma ta o poți șterge; pe ale altora le poți raporta.
+            UIRouter.SetVisible(deleteButton, trace.mine);
+            UIRouter.SetVisible(reportButton, !trace.mine);
             reportButton.text = trace.reported ? "Raportată" : "Raportează";
             reportButton.SetEnabled(!trace.reported);
 
@@ -172,18 +177,16 @@ namespace ThreeTimes.UI
         }
     }
 
-    /// <summary>Legătura dintre datele unei urme și felul în care arată (clasă USS, nume).</summary>
+    /// <summary>Scurtături pentru felul în care arată o urmă (restul e în TraceStyle).</summary>
     public static class TraceLook
     {
+        /// <summary>Clasele USS vechi ale celor trei emoții (imaginile fixe), scoase acum de pe elemente.</summary>
         public static readonly string[] Keys = { "joy", "sadness", "longing" };
 
-        public static string Key(string emotionCode) =>
-            emotionCode == "SADNESS" ? "sadness" : emotionCode == "LONGING" ? "longing" : "joy";
-
-        public static string Name(string emotionCode) =>
-            emotionCode == "SADNESS" ? "tristețe" : emotionCode == "LONGING" ? "dor" : "bucurie";
+        /// <summary>Numele emoției pentru afișare (codurile vechi devin cuvinte românești).</summary>
+        public static string Name(string emotion) => TraceStyle.LabelOf(emotion);
 
         /// <summary>0 = încet, 1 = mediu, 2 = puternic.</summary>
-        public static int Level(float intensity) => intensity < 0.5f ? 0 : intensity < 0.84f ? 1 : 2;
+        public static int Level(float intensity) => TraceStyle.LevelOf(intensity);
     }
 }
