@@ -45,6 +45,14 @@ namespace ThreeTimes.UI
 
         public bool CameraOn { get; private set; }
 
+        /// <summary>
+        /// Întrebat înainte să se trimită o urmă: mesajul care spune de ce nu se poate încă, sau null.
+        /// Îl setează TraceManager.
+        /// </summary>
+        public Func<string> TraceSubmitCheck { get; set; }
+
+        ThreeTimes.Media.VoicePlayer voicePlayer;
+
         VisualElement screenLog;
         Label logText;
         VisualElement screenMain, screenMenu, screenAbout, pastTint, cameraPrompt, simTraces;
@@ -160,7 +168,8 @@ namespace ThreeTimes.UI
                 Raise(ClearTracesRequested, "Nu ai urme de test.");
             };
 
-            traceDetail = new TraceDetailView(root, router);
+            voicePlayer = new ThreeTimes.Media.VoicePlayer(gameObject);
+            traceDetail = new TraceDetailView(root, router, voicePlayer);
             traceDetail.ReportRequested += t => TraceReportRequested?.Invoke(t);
             traceDetail.DeleteRequested += t => TraceDeleteRequested?.Invoke(t);
 
@@ -174,7 +183,7 @@ namespace ThreeTimes.UI
                 WorldTapped?.Invoke(new Vector2(evt.position.x * scale, Screen.height - evt.position.y * scale));
             });
 
-            traceSheet = new TraceSheetView(root, router);
+            traceSheet = new TraceSheetView(root, router, this, () => TraceSubmitCheck?.Invoke(), voicePlayer);
             traceSheet.Submitted += draft =>
             {
                 if (TraceSubmitted != null) TraceSubmitted.Invoke(draft);
@@ -210,7 +219,7 @@ namespace ThreeTimes.UI
             var keyboard = Keyboard.current;
             if (!initialized || keyboard == null || !keyboard.escapeKey.wasPressedThisFrame) return;
             if (traceDetail.IsOpen) traceDetail.Close();
-            else if (traceSheet.IsOpen) traceSheet.Close();
+            else if (traceSheet.IsOpen) { if (!traceSheet.HandleBack()) traceSheet.Close(); }
             else if (IsVisible(screenLog)) UIRouter.SetVisible(screenLog, false);
             else if (IsVisible(screenAbout)) CloseAbout();
             else if (IsVisible(screenMenu)) CloseMenu();
@@ -267,15 +276,27 @@ namespace ThreeTimes.UI
                 item.style.left = Length.Percent(x);
                 item.style.top = Length.Percent(y);
 
+                // Forma stă pe fundalul tipului (polaroid pentru poză, microfon pentru voce).
+                var holder = new VisualElement { pickingMode = PickingMode.Ignore };
+                holder.style.width = size;
+                holder.style.height = size;
+                var backdrop = TraceTypeBackdrop.Create(t.type, key, size);
+                if (backdrop != null) holder.Add(backdrop);
+
                 var shape = new VisualElement { pickingMode = PickingMode.Ignore };
                 shape.AddToClassList("sim-trace__shape");
                 shape.AddToClassList($"shape--{key}-{level}");
+                shape.style.position = Position.Absolute;
+                shape.style.left = 0;
+                shape.style.top = 0;
                 shape.style.width = size;
                 shape.style.height = size;
-                item.Add(shape);
+                holder.Add(shape);
+                item.Add(holder);
 
                 var label = new Label(TraceLook.Name(t.emotion)) { pickingMode = PickingMode.Ignore };
                 label.AddToClassList("sim-trace__label");
+                label.style.marginTop = TraceTypeBackdrop.ExtraBelow(t.type, size);
                 item.Add(label);
 
                 simTraces.Add(item);

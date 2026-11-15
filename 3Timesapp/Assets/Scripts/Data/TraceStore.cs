@@ -11,13 +11,18 @@ namespace ThreeTimes.Data
     {
         public string id;
         public string type = "TEXT";  // TEXT, PHOTO, VOICE (ca în diagrama de clase)
-        public string content;
+        public string content;        // mesajul; la poză și voce e descrierea (opțională)
+        public string mediaFile;      // numele fișierului din media/ (poză .jpg sau voce .wav), gol la text
+        public string photoSource;    // SELFIE, PLACE, PLACE_WITH_TRACES (doar la poză)
+        public float durationSeconds; // durata înregistrării (doar la voce)
         public string emotion;        // JOY, SADNESS, LONGING
         public float intensity;       // 0..1
         public double latitude;
         public double longitude;
-        public double altitude;
+        public double altitude;          // altitudinea absolută (WGS84), folosită doar dacă ancora pe teren eșuează
+        public float heightAboveTerrain = 1.2f; // înălțimea urmei față de sol (m); urmele vechi primesc 1,2 m
         public float accuracyMeters;  // precizia orizontală din momentul plasării
+        public float yawAccuracyDegrees; // precizia orientării din momentul plasării
         public string createdAt;      // ISO 8601, UTC
         public bool reported;         // marcată pentru moderare (până la server, doar local)
     }

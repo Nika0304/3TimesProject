@@ -41,6 +41,14 @@ namespace ThreeTimes.AR
         [Tooltip("Odată bună, localizarea se pierde abia când eroarea crește peste prag × acest factor.")]
         [SerializeField] double hysteresis = 1.5;
 
+        [Header("Precizie pentru urme (ancorare)")]
+        [Tooltip("Urmele se readuc și se lasă doar sub această eroare orizontală (m).")]
+        [SerializeField] double preciseHorizontalAccuracy = 1.5;
+        [Tooltip("Urmele se readuc și se lasă doar sub această eroare de orientare (grade).")]
+        [SerializeField] double preciseYawAccuracy = 5;
+        [Tooltip("Cât timp (s) trebuie să rămână precizia bună înainte să ancorăm urme.")]
+        [SerializeField] float preciseStableSeconds = 1.5f;
+
         [Header("Simulare în Editor (Piața Victoriei)")]
         [SerializeField] double simLatitude = 45.75270;
         [SerializeField] double simLongitude = 21.22530;
@@ -53,9 +61,19 @@ namespace ThreeTimes.AR
         public LocalizationQuality Quality { get; private set; } = LocalizationQuality.None;
         public GeoFix? Fix { get; private set; }
 
+        /// <summary>
+        /// Precizie destul de bună (și stabilă) ca urmele să stea exact la locul lor.
+        /// E mai strictă decât „Good”, care ajunge doar pentru a începe.
+        /// </summary>
+        public bool IsPrecise { get; private set; }
+
+        /// <summary>Precizia pentru urme, ca text pentru mesaje: „±1,5 m și ±5°”.</summary>
+        public string PreciseThresholdText => $"±{preciseHorizontalAccuracy:0.#} m și ±{preciseYawAccuracy:0}°";
+
         public event Action<LocalizationQuality> QualityChanged;
 
         float simStartTime;
+        float preciseSince = -1f;
 
         public void Begin(bool simulated)
         {
@@ -63,6 +81,7 @@ namespace ThreeTimes.AR
             Running = true;
             simStartTime = Time.realtimeSinceStartup;
             Fix = null;
+            ResetPrecise();
             SetQuality(LocalizationQuality.None);
         }
 
@@ -70,6 +89,7 @@ namespace ThreeTimes.AR
         {
             Running = false;
             Fix = null;
+            ResetPrecise();
             SetQuality(LocalizationQuality.None);
         }
 
@@ -95,6 +115,7 @@ namespace ThreeTimes.AR
                 earthManager.EarthTrackingState != TrackingState.Tracking)
             {
                 Fix = null;
+                ResetPrecise();
                 SetQuality(LocalizationQuality.None);
                 return;
             }
@@ -111,6 +132,32 @@ namespace ThreeTimes.AR
             };
             Fix = fix;
             SetQuality(Evaluate(fix));
+            UpdatePrecise(fix);
+        }
+
+        void UpdatePrecise(GeoFix fix)
+        {
+            double factor = IsPrecise ? hysteresis : 1.0;
+            bool ok = fix.HorizontalAccuracy <= preciseHorizontalAccuracy * factor &&
+                      fix.YawAccuracy <= preciseYawAccuracy * factor;
+            if (!ok)
+            {
+                ResetPrecise();
+                return;
+            }
+            float now = Time.realtimeSinceStartup;
+            if (preciseSince < 0f) preciseSince = now;
+            if (!IsPrecise && now - preciseSince >= preciseStableSeconds)
+            {
+                IsPrecise = true;
+                Debug.Log($"[3Times] Precizie pentru urme: ±{fix.HorizontalAccuracy:0.0} m, ±{fix.YawAccuracy:0}°");
+            }
+        }
+
+        void ResetPrecise()
+        {
+            preciseSince = -1f;
+            IsPrecise = false;
         }
 
         LocalizationQuality Evaluate(GeoFix fix)

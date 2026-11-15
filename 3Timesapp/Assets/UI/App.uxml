@@ -283,7 +283,33 @@
                     <ui:Button name="trace-type-voice" text="Voce" class="seg" />
                 </ui:VisualElement>
 
-                <ui:Label text="Mesajul tău" class="field-label" />
+                <!-- Poza: se face pe loc, fără galerie -->
+                <ui:VisualElement name="trace-photo-panel" class="media-panel hidden">
+                    <ui:VisualElement name="trace-photo-pick" class="row">
+                        <ui:Button name="photo-selfie" text="Selfie" class="btn btn--secondary grow media-btn" />
+                        <ui:Button name="photo-place" text="Locul" class="btn btn--secondary grow gap-left media-btn" />
+                        <ui:Button name="photo-traces" text="Cu urmele" class="btn btn--secondary grow gap-left media-btn" />
+                    </ui:VisualElement>
+                    <ui:VisualElement name="trace-photo-done" class="row hidden">
+                        <ui:VisualElement name="trace-photo-thumb" class="photo-thumb" />
+                        <ui:VisualElement class="grow media-info">
+                            <ui:Label name="trace-photo-label" text="Selfie" class="media-title" />
+                            <ui:Button name="trace-photo-redo" text="Refă poza" class="pill-btn media-redo" />
+                        </ui:VisualElement>
+                    </ui:VisualElement>
+                </ui:VisualElement>
+
+                <!-- Vocea: cel mult 30 de secunde -->
+                <ui:VisualElement name="trace-voice-panel" class="media-panel hidden">
+                    <ui:Button name="voice-record" text="Înregistrează (cel mult 30 s)" class="btn btn--secondary voice-record" />
+                    <ui:VisualElement name="trace-voice-done" class="row hidden">
+                        <ui:Button name="voice-play" text="Ascultă" class="btn btn--secondary grow" />
+                        <ui:Label name="voice-duration" text="0:00" class="media-title voice-duration" />
+                        <ui:Button name="voice-redo" text="Refă" class="pill-btn" />
+                    </ui:VisualElement>
+                </ui:VisualElement>
+
+                <ui:Label name="trace-text-label" text="Mesajul tău" class="field-label" />
                 <ui:TextField name="trace-text" multiline="true" max-length="280" placeholder-text="Ce s-a întâmplat aici?" class="trace-input" />
 
                 <ui:Label text="Cum te simți?" class="field-label" />
@@ -326,6 +352,11 @@
                     <ui:VisualElement name="detail-shape" class="detail-shape shape--joy-1" />
                     <ui:Label name="detail-emotion" text="bucurie" class="detail-emotion detail-emotion--joy" />
                 </ui:VisualElement>
+                <ui:VisualElement name="detail-photo" class="detail-photo hidden" />
+                <ui:VisualElement name="detail-voice" class="row detail-voice hidden">
+                    <ui:Button name="detail-play" text="Ascultă" class="btn btn--secondary grow" />
+                    <ui:Label name="detail-duration" text="0:00" class="media-title voice-duration" />
+                </ui:VisualElement>
                 <ui:Label name="detail-text" text="" class="detail-text" />
                 <ui:Label name="detail-meta" text="" class="caption" />
                 <ui:VisualElement class="row detail-actions">
@@ -333,6 +364,23 @@
                     <ui:Button name="detail-close" text="Închide" class="btn btn--dark grow gap-left" />
                 </ui:VisualElement>
                 <ui:Button name="detail-delete" text="Șterge urma mea" class="btn btn--ghost" />
+            </ui:VisualElement>
+        </ui:VisualElement>
+
+        <!-- Fotografierea unei urme (selfie / locul / locul cu urmele) -->
+        <ui:VisualElement name="capture-overlay" class="fill hidden">
+            <ui:VisualElement name="capture-preview-frame" class="fill capture-frame hidden" picking-mode="Ignore" />
+            <ui:VisualElement class="capture-bar">
+                <ui:Label name="capture-hint" text="" class="capture-hint" />
+                <ui:VisualElement class="row capture-controls">
+                    <ui:Button name="capture-cancel" class="round-btn round-btn--big">
+                        <ui:VisualElement class="icon icon--close" picking-mode="Ignore" />
+                    </ui:Button>
+                    <ui:Button name="capture-shutter" class="capture-shutter">
+                        <ui:VisualElement class="capture-shutter__inner" picking-mode="Ignore" />
+                    </ui:Button>
+                    <ui:VisualElement class="capture-spacer" />
+                </ui:VisualElement>
             </ui:VisualElement>
         </ui:VisualElement>
 

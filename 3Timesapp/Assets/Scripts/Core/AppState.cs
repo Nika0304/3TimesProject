@@ -43,7 +43,15 @@ namespace ThreeTimes.Core
     /// <summary>Ce completează utilizatorul pe ecranul „Lasă o urmă”.</summary>
     public struct TraceDraft
     {
+        /// <summary>TEXT, PHOTO sau VOICE.</summary>
+        public string Type;
+        /// <summary>Mesajul (la poză și voce, descrierea opțională).</summary>
         public string Text;
+        /// <summary>Fișierul pozei sau al înregistrării, deja salvat în media/.</summary>
+        public string MediaFile;
+        /// <summary>SELFIE, PLACE sau PLACE_WITH_TRACES (doar la poză).</summary>
+        public string PhotoSource;
+        public float DurationSeconds;
         public Emotion Emotion;
         /// <summary>0 = încet, 1 = mediu, 2 = puternic.</summary>
         public int Intensity;

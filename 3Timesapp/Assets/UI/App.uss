@@ -849,3 +849,90 @@
 }
 .word-out { opacity: 0; translate: 0 8px; }
 .fade-hidden { opacity: 0; }
+
+/* ---------- poza și vocea unei urme ---------- */
+
+.media-panel { margin-top: 12px; }
+.media-btn,
+.media-btn:hover { font-size: 15px; padding: 0 8px; }
+
+.photo-thumb {
+    width: 96px;
+    height: 96px;
+    border-radius: 18px;
+    background-color: var(--peach-soft);
+    -unity-background-scale-mode: scale-and-crop;
+    flex-shrink: 0;
+}
+.media-info { margin-left: 14px; align-items: flex-start; }
+.media-title {
+    -unity-font: url("Fonts/Fraunces-Italic.ttf");
+    -unity-font-definition: initial;
+    font-size: 18px;
+    color: var(--ink);
+    margin: 0 0 8px 0;
+    padding: 0;
+}
+.media-redo { margin: 0; }
+
+.voice-record { width: 100%; }
+.voice-record--on,
+.voice-record--on:hover {
+    background-color: var(--present-tint);
+    border-color: var(--coral);
+    color: var(--present);
+}
+.voice-duration { margin: 0 12px; -unity-text-align: middle-center; }
+
+.trace-input--short { height: 52px; }
+
+.detail-photo {
+    height: 240px;
+    margin-top: 14px;
+    border-radius: 18px;
+    background-color: var(--bg);
+    -unity-background-scale-mode: scale-to-fit;
+}
+.detail-voice { margin-top: 14px; }
+
+/* ---------- fotografierea ---------- */
+
+.capture-frame { background-color: #000000; overflow: hidden; }
+.capture-preview { position: absolute; }
+
+.capture-bar {
+    position: absolute;
+    left: 0; right: 0; bottom: 0;
+    padding: 18px 24px 34px 24px;
+    background-color: rgba(31, 58, 95, 0.35);
+    align-items: center;
+}
+.capture-hint {
+    font-size: 15px;
+    color: #FFFFFF;
+    margin: 0 0 14px 0;
+    padding: 0;
+    -unity-text-align: middle-center;
+}
+.capture-controls { width: 100%; justify-content: space-between; }
+.capture-spacer { width: 52px; height: 52px; }
+.capture-shutter,
+.capture-shutter:hover {
+    width: 76px;
+    height: 76px;
+    margin: 0;
+    padding: 0;
+    border-radius: 38px;
+    border-width: 4px;
+    border-color: #FFFFFF;
+    background-color: rgba(0, 0, 0, 0);
+    align-items: center;
+    justify-content: center;
+}
+.capture-shutter__inner {
+    width: 60px;
+    height: 60px;
+    border-radius: 30px;
+    background-color: var(--coral);
+}
+.capture-shutter:active .capture-shutter__inner { background-color: var(--coral-pressed); }

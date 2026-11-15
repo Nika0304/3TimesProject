@@ -28,7 +28,12 @@ namespace ThreeTimes.AR
 
         /// <param name="emotionKey">"joy", "sadness" sau "longing"</param>
         /// <param name="level">0 = încet, 1 = mediu, 2 = puternic</param>
-        public static GameObject Build(string emotionKey, int level, string seedText, Material material, Transform parent)
+        /// <param name="traceType">
+        /// TEXT, PHOTO sau VOICE. Textul e doar forma emoției; la poză forma stă pe un polaroid,
+        /// la voce pe un microfon (amândouă albe, puțin transparente, ca un fundal).
+        /// </param>
+        public static GameObject Build(string emotionKey, int level, string seedText, Material material, Transform parent,
+                                       string traceType = "TEXT")
         {
             int seed = 17;
             foreach (char c in seedText ?? "") seed = unchecked(seed * 31 + c);
@@ -39,17 +44,38 @@ namespace ThreeTimes.AR
                 emotionKey == "longing" ? Crescent(level, random) :
                 Flower(level, random);
 
-            var go = new GameObject("Shape");
+            float unit = Diameter(level) / 100f; // metri pe unitate de machetă
+            var go = CreateSystem("Shape", parent, material, out var system);
+            foreach (var dot in dots)
+                Emit(system, new Vector3((dot.Position.x - 50f) * unit, (50f - dot.Position.y) * unit, dot.Position.z * unit),
+                     dot.Radius * 2f * unit * 1.5f, dot.Color); // textura e estompată spre margini
+
+            // Tipul urmei: în spatele formei, un polaroid (poză) sau un microfon (voce), alb, puțin transparent.
+            if (traceType == "PHOTO" || traceType == "VOICE")
+            {
+                Color tint = emotionKey == "sadness" ? Sadness : emotionKey == "longing" ? Longing : JoyCore;
+                var backdrop = TraceBackdropMesh.Create(traceType, Diameter(level), tint, material, go.transform);
+                if (traceType == "VOICE") backdrop.AddComponent<TraceTypePulse>();
+            }
+
+            var animator = go.AddComponent<TraceShapeAnimator>();
+            animator.Setup(emotionKey, level, seed);
+            return go;
+        }
+
+        static GameObject CreateSystem(string name, Transform parent, Material material, out ParticleSystem system)
+        {
+            var go = new GameObject(name);
             go.transform.SetParent(parent, false);
 
-            var system = go.AddComponent<ParticleSystem>();
+            system = go.AddComponent<ParticleSystem>();
             system.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
 
             var main = system.main;
             main.playOnAwake = false;
             main.loop = true;
             main.startSpeed = 0f;
-            main.startLifetime = 1000000f; // particulele rămân pe loc; mișcarea vine din TraceShapeAnimator
+            main.startLifetime = 1000000f; // particulele rămân pe loc; mișcarea vine din animatoare
             main.maxParticles = 400;
             main.simulationSpace = ParticleSystemSimulationSpace.Local;
             main.scalingMode = ParticleSystemScalingMode.Hierarchy;
@@ -66,24 +92,20 @@ namespace ThreeTimes.AR
             renderer.receiveShadows = false;
 
             system.Play();
-
-            float unit = Diameter(level) / 100f; // metri pe unitate de machetă
-            foreach (var dot in dots)
-            {
-                var emit = new ParticleSystem.EmitParams
-                {
-                    position = new Vector3((dot.Position.x - 50f) * unit, (50f - dot.Position.y) * unit, dot.Position.z * unit),
-                    velocity = Vector3.zero,
-                    startSize = dot.Radius * 2f * unit * 1.5f, // textura e estompată spre margini
-                    startColor = dot.Color,
-                    startLifetime = 1000000f
-                };
-                system.Emit(emit, 1);
-            }
-
-            var animator = go.AddComponent<TraceShapeAnimator>();
-            animator.Setup(emotionKey, level, seed);
             return go;
+        }
+
+        static void Emit(ParticleSystem system, Vector3 position, float size, Color color)
+        {
+            var emit = new ParticleSystem.EmitParams
+            {
+                position = position,
+                velocity = Vector3.zero,
+                startSize = size,
+                startColor = color,
+                startLifetime = 1000000f
+            };
+            system.Emit(emit, 1);
         }
 
         // ---------------------------------------------------------------- formele
