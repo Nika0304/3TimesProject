@@ -42,6 +42,8 @@ namespace ThreeTimes.UI
         public event Action<Vector2> WorldTapped;
         public event Action<ThreeTimes.Data.SavedTrace> TraceReportRequested;
         public event Action<ThreeTimes.Data.SavedTrace> TraceDeleteRequested;
+        /// <summary>Contul a fost șters împreună cu urmele lui (TraceManager le scoate și de pe telefon).</summary>
+        public event Action AccountDeleted;
 
         public bool CameraOn { get; private set; }
 
@@ -62,8 +64,12 @@ namespace ThreeTimes.UI
         /// <summary>Urmele din jurul unui punct, pentru hartă (lat, lng, rază în metri, rezultat). Îl setează TraceManager.</summary>
         public Action<double, double, float, Action<List<ThreeTimes.Data.SavedTrace>>> MapTraces { get; set; }
 
+        /// <summary>Urmele contului, pentru „Harta mea” (rezultat: urmele sau null, mesajul de eroare). Îl setează TraceManager.</summary>
+        public Action<Action<List<ThreeTimes.Data.SavedTrace>, string>> MapMyTraces { get; set; }
+
         MapScreenView map;
         PostcardView postcard;
+        AccountView account;
 
         /// <summary>Urmele care se văd acum în jur (pentru cartea poștală). Îl setează TraceManager.</summary>
         public Func<List<ThreeTimes.Data.SavedTrace>> VisibleTraces { get; set; }
@@ -157,7 +163,9 @@ namespace ThreeTimes.UI
             // Meniu și ecrane secundare
             root.Q<Button>("menu-button").clicked += OpenMenu;
             root.Q<Button>("menu-close").clicked += CloseMenu;
-            root.Q<Button>("menu-account").clicked += () => router.Toast("Contul (opțional) vine într-o etapă următoare.");
+            account = new AccountView(root, router, this);
+            account.AccountDeleted += () => AccountDeleted?.Invoke();
+            root.Q<Button>("menu-account").clicked += () => account.Open();
             root.Q<Button>("menu-about").clicked += OpenAbout;
 
             // Serverul: adresa se poate schimba (la hotspot, IP-ul laptopului)
@@ -223,7 +231,12 @@ namespace ThreeTimes.UI
                                         if (MapTraces != null) MapTraces(lat, lng, radius, done);
                                         else done(new List<ThreeTimes.Data.SavedTrace>());
                                     },
-                                    OpenTrace);
+                                    OpenTrace,
+                                    done =>
+                                    {
+                                        if (MapMyTraces != null) MapMyTraces(done);
+                                        else done(null, "Urmele nu sunt încă legate în scenă.");
+                                    });
             root.Q<Button>("action-map").clicked += () => { map.Open(); MapRequested?.Invoke(); };
             postcard = new PostcardView(root, router, this, tracker, () => VisibleTraces?.Invoke());
             root.Q<Button>("action-postcard").clicked += () =>
@@ -265,6 +278,7 @@ namespace ThreeTimes.UI
             else if (map.IsOpen) map.Back();
             else if (traceSheet.IsOpen) { if (!traceSheet.HandleBack()) traceSheet.Close(); }
             else if (IsVisible(screenLog)) UIRouter.SetVisible(screenLog, false);
+            else if (account.IsOpen) account.Back();
             else if (IsVisible(screenAbout)) CloseAbout();
             else if (IsVisible(screenMenu)) CloseMenu();
             else if (Mode != TimeMode.Present) Select(TimeMode.Present);

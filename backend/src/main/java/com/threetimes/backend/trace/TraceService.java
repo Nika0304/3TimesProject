@@ -10,6 +10,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.threetimes.backend.common.ApiException;
+import com.threetimes.backend.common.Viewer;
 import com.threetimes.backend.emotion.EmotionLook;
 import com.threetimes.backend.emotion.Verdict;
 import com.threetimes.backend.trace.TraceDtos.CreateRequest;
@@ -44,7 +45,7 @@ public class TraceService {
         this.maxLimit = maxLimit;
     }
 
-    public List<TraceView> nearby(double lat, double lng, double radius, int limit, String me) {
+    public List<TraceView> nearby(double lat, double lng, double radius, int limit, Viewer me) {
         checkCoordinates(lat, lng);
         double r = Math.max(1, Math.min(radius, maxRadius));
         int n = Math.max(1, Math.min(limit, maxLimit));
@@ -53,10 +54,11 @@ public class TraceService {
 
     /**
      * Lasă o urmă. Dacă telefonul retrimite aceeași urmă (același id), întoarce urma existentă,
-     * fără să o dubleze.
+     * fără să o dubleze. me.device() e obligatoriu; me.user() e contul, dacă e deschis.
      */
     @Transactional
-    public TraceView create(CreateRequest request, byte[] media, String owner, Verdict verdict) {
+    public TraceView create(CreateRequest request, byte[] media, Viewer me, Verdict verdict) {
+        String owner = me.device();
         var r = normalize(request);
         String content = r.content() == null ? "" : r.content().trim();
         if (content.codePointCount(0, content.length()) > MAX_CONTENT)
@@ -65,43 +67,49 @@ public class TraceService {
         String mediaType = checkMedia(r, media, content);
         UUID id = parseOrNew(r.id());
 
-        if (!repository.insert(id, r, content, owner, verdict)) {
-            Stored existing = repository.find(id, owner).orElseThrow(ApiException::notFound);
-            if (!owner.equals(existing.ownerHash()))
+        if (!repository.insert(id, r, content, owner, me.user(), verdict)) {
+            Stored existing = repository.find(id, me).orElseThrow(ApiException::notFound);
+            if (!me.owns(existing.ownerHash(), existing.userId()))
                 throw new ApiException(HttpStatus.CONFLICT, "Există deja o urmă cu acest id.");
             return existing.view(); // retrimitere: urma e deja salvată
         }
         if (mediaType != null) repository.insertMedia(id, mediaType, media);
-        return repository.find(id, owner).orElseThrow().view();
+        return repository.find(id, me).orElseThrow().view();
     }
 
-    public List<String> myIds(String me) {
+    public List<String> myIds(Viewer me) {
         return repository.idsOf(me);
     }
 
-    public TraceView get(UUID id, String me) {
+    /** Urmele contului (pentru „Harta mea”); cel mult 500, de la cea mai nouă. */
+    public List<TraceView> ofUser(Viewer me) {
+        if (me.user() == null) return List.of();
+        return repository.ofUser(me, 500);
+    }
+
+    public TraceView get(UUID id, Viewer me) {
         return visible(id, me).view();
     }
 
-    public Media media(UUID id, String me) {
+    public Media media(UUID id, Viewer me) {
         visible(id, me);
         return repository.media(id).orElseThrow(ApiException::notFound);
     }
 
     @Transactional
-    public void report(UUID id, String me, String reason) {
+    public void report(UUID id, Viewer me, String reason) {
         Stored trace = visible(id, me);
-        if (me.equals(trace.ownerHash()))
+        if (me.owns(trace.ownerHash(), trace.userId()))
             throw ApiException.badRequest("Nu îți poți raporta propria urmă.");
         String r = reason == null ? null : reason.trim();
         if (r != null && r.length() > 200) r = r.substring(0, 200);
-        repository.report(id, me, r == null || r.isEmpty() ? null : r, reportsToHide);
+        repository.report(id, me.device(), r == null || r.isEmpty() ? null : r, reportsToHide);
     }
 
     @Transactional
-    public void delete(UUID id, String me) {
+    public void delete(UUID id, Viewer me) {
         Stored trace = repository.find(id, me).orElseThrow(ApiException::notFound);
-        if (!me.equals(trace.ownerHash()))
+        if (!me.owns(trace.ownerHash(), trace.userId()))
             throw ApiException.forbidden("Poți șterge doar urmele lăsate de tine.");
         repository.delete(id);
     }
@@ -109,9 +117,9 @@ public class TraceService {
     // ---------------------------------------------------------------- reguli
 
     /** Urmele ascunse după raportări le mai vede doar cine le-a lăsat. */
-    private Stored visible(UUID id, String me) {
+    private Stored visible(UUID id, Viewer me) {
         Stored trace = repository.find(id, me).orElseThrow(ApiException::notFound);
-        if (trace.hidden() && (me == null || !me.equals(trace.ownerHash()))) throw ApiException.notFound();
+        if (trace.hidden() && (me == null || !me.owns(trace.ownerHash(), trace.userId()))) throw ApiException.notFound();
         return trace;
     }
 

@@ -205,7 +205,7 @@
                     </ui:Button>
                 </ui:VisualElement>
                 <ui:Button name="menu-account" class="list-item">
-                    <ui:Label text="Cont" class="list-item__text" picking-mode="Ignore" />
+                    <ui:Label name="menu-account-label" text="Cont" class="list-item__text" picking-mode="Ignore" />
                     <ui:VisualElement class="icon icon--chevron" picking-mode="Ignore" />
                 </ui:Button>
                 <ui:Button name="menu-about" class="list-item">
@@ -251,9 +251,86 @@
                     <ui:Label text="Harta: © OpenStreetMap contributors (openstreetmap.org/copyright), © CARTO." class="caption section" />
                     <ui:Label text="Confidențialitate" class="title" />
                     <ui:Label text="Aplicația folosește camera și locația telefonului. Imaginile camerei nu se salvează. Urmele pe care le lași păstrează locul în care le-ai lăsat și pot fi șterse oricând, la cerere." class="body section" />
+                    <ui:Label text="Contul e opțional. Dacă îți faci unul, păstrăm doar emailul și parola (criptată, nu poate fi citită). Îl poți șterge oricând din Meniu → Cont, împreună cu toate urmele tale." class="body section" />
                     <ui:Label text="Ca să-ți propunem emoția, textul urmei (doar textul, fără locul ei sau alte date) e trimis serviciului Google Gemini. Emoția o poți schimba oricând." class="body section" />
                     <ui:Label text="Această aplicație folosește Google Play Services for AR (ARCore), oferit de Google LLC și guvernat de Politica de confidențialitate Google." class="caption section" />
                     <ui:Label text="Proiect Codesign Hardware/Software, Universitatea Politehnica Timișoara, 2026–2027." class="caption" />
+                </ui:ScrollView>
+            </ui:VisualElement>
+        </ui:VisualElement>
+
+        <!-- Cont (opțional): autentificare / înregistrare cu email și parolă; după autentificare, contul -->
+        <ui:VisualElement name="screen-account" class="screen screen--paper hidden">
+            <ui:VisualElement class="safe">
+                <ui:VisualElement class="topbar">
+                    <ui:Button name="account-back" class="round-btn">
+                        <ui:VisualElement class="icon icon--back" picking-mode="Ignore" />
+                    </ui:Button>
+                    <ui:Label text="Cont" class="title" />
+                    <ui:VisualElement class="topbar-spacer" />
+                </ui:VisualElement>
+                <ui:ScrollView class="grow">
+                    <!-- Fără cont: „Intră în cont” sau „Cont nou” -->
+                    <ui:VisualElement name="account-signed-out">
+                        <ui:VisualElement class="segments account-tabs">
+                            <ui:Button name="account-tab-login" text="Intră în cont" class="seg seg--active" />
+                            <ui:Button name="account-tab-register" text="Cont nou" class="seg" />
+                        </ui:VisualElement>
+                        <ui:Label name="account-title" text="Bine ai revenit" class="display display--small account-title" />
+                        <ui:Label name="account-intro" text="Intră cu emailul și parola contului tău." class="caption account-intro" />
+                        <ui:Label name="account-server-note" text="Contul are nevoie de server: pune adresa lui în Meniu, la „Server”." class="caption account-note hidden" />
+
+                        <ui:VisualElement name="account-names" class="row account-names hidden">
+                            <ui:VisualElement class="grow account-name">
+                                <ui:Label text="Prenume" class="field-label" />
+                                <ui:TextField name="account-first-name" class="server-input" />
+                            </ui:VisualElement>
+                            <ui:VisualElement class="grow account-name gap-left">
+                                <ui:Label text="Nume" class="field-label" />
+                                <ui:TextField name="account-last-name" class="server-input" />
+                            </ui:VisualElement>
+                        </ui:VisualElement>
+                        <ui:Label text="Email" class="field-label" />
+                        <ui:TextField name="account-email" placeholder-text="nume@exemplu.ro" class="server-input" />
+                        <ui:Label text="Parolă" class="field-label" />
+                        <ui:TextField name="account-password" class="server-input" />
+
+                        <!-- Doar la cont nou: cât de puternică e parola -->
+                        <ui:VisualElement name="account-strength" class="strength hidden">
+                            <ui:VisualElement class="row strength__bars">
+                                <ui:VisualElement name="strength-1" class="strength__bar grow" />
+                                <ui:VisualElement name="strength-2" class="strength__bar grow gap-small" />
+                                <ui:VisualElement name="strength-3" class="strength__bar grow gap-small" />
+                            </ui:VisualElement>
+                            <ui:Label name="strength-label" text="" class="caption strength__label" />
+                        </ui:VisualElement>
+
+                        <ui:Label name="account-error" text="" class="caption account-error hidden" />
+                        <ui:Button name="account-submit" text="Intră în cont" class="btn btn--primary account-submit" />
+                        <ui:VisualElement class="account-divider" />
+                        <ui:Button name="account-skip" text="Continuă fără cont" class="btn btn--secondary" />
+                    </ui:VisualElement>
+
+                    <!-- Cu cont -->
+                    <ui:VisualElement name="account-signed-in" class="hidden">
+                        <ui:Label text="Contul tău" class="display display--small account-title" />
+                        <ui:VisualElement class="account-card">
+                            <ui:Label name="account-current-email" text="" class="title account-card__email" />
+                            <ui:Label name="account-meta" text="" class="caption" />
+                        </ui:VisualElement>
+                        <ui:Label text="Urmele pe care le lași acum intră în cont. Le găsești pe hartă, la „Harta mea”, de pe orice telefon pe care intri în cont." class="body account-intro" />
+                        <ui:Button name="account-logout" text="Deconectează-te" class="btn btn--secondary" />
+                        <ui:VisualElement class="account-divider" />
+                        <ui:Button name="account-delete" text="Șterge contul și urmele mele" class="btn btn--danger" />
+                        <ui:VisualElement name="account-confirm" class="account-confirm hidden">
+                            <ui:Label text="Se șterg contul și toate urmele tale, cu pozele și vocile lor. Nu se poate anula." class="body" />
+                            <ui:Label name="account-delete-error" text="" class="caption account-error hidden" />
+                            <ui:VisualElement class="row account-confirm__actions">
+                                <ui:Button name="account-delete-cancel" text="Renunță" class="btn btn--secondary grow" />
+                                <ui:Button name="account-delete-confirm" text="Da, șterge tot" class="btn btn--danger-solid grow gap-left" />
+                            </ui:VisualElement>
+                        </ui:VisualElement>
+                    </ui:VisualElement>
                 </ui:ScrollView>
             </ui:VisualElement>
         </ui:VisualElement>
@@ -273,6 +350,11 @@
                     <ui:Label name="map-status" text="" class="map-status" picking-mode="Ignore" />
                     <ui:VisualElement class="topbar-spacer" picking-mode="Ignore" />
                 </ui:VisualElement>
+                <!-- „Harta mea”: doar urmele contului tău (doar cu cont) -->
+                <ui:VisualElement class="segments map-tabs">
+                    <ui:Button name="map-tab-all" text="Urme" class="seg seg--active" />
+                    <ui:Button name="map-tab-mine" text="Harta mea" class="seg" />
+                </ui:VisualElement>
                 <ui:VisualElement class="grow" picking-mode="Ignore" />
                 <ui:VisualElement class="map-controls" picking-mode="Ignore">
                     <ui:Button name="map-zoom-in" text="+" class="round-btn map-control" />
@@ -282,6 +364,21 @@
                     </ui:Button>
                 </ui:VisualElement>
                 <ui:Label text="© OpenStreetMap contributors, © CARTO" class="map-attribution" picking-mode="Ignore" />
+                <!-- Mai multe urme în același loc: le arătăm mari, într-o fereastră; atingerea uneia o deschide în card -->
+                <ui:VisualElement name="map-group" class="map-card map-group hidden">
+                    <ui:VisualElement class="row">
+                        <ui:VisualElement class="grow" picking-mode="Ignore">
+                            <ui:Label name="map-group-title" text="" class="title" />
+                            <ui:Label text="Atinge o urmă ca s-o vezi." class="caption" />
+                        </ui:VisualElement>
+                        <ui:Button name="map-group-close" class="round-btn">
+                            <ui:VisualElement class="icon icon--close" picking-mode="Ignore" />
+                        </ui:Button>
+                    </ui:VisualElement>
+                    <ui:ScrollView name="map-group-scroll" class="map-group__scroll">
+                        <ui:VisualElement name="map-group-grid" class="map-group__grid" />
+                    </ui:ScrollView>
+                </ui:VisualElement>
                 <ui:VisualElement name="map-card" class="map-card hidden">
                     <ui:VisualElement class="row">
                         <ui:VisualElement name="map-card-shape" class="map-card__holder" picking-mode="Ignore" />
@@ -295,6 +392,12 @@
                     </ui:VisualElement>
                     <ui:Label name="map-card-distance" text="" class="body map-card__distance" />
                     <ui:Label name="map-card-hint" text="" class="caption" />
+                    <!-- Mai multe urme în același loc: le răsfoiești -->
+                    <ui:VisualElement name="map-card-nav" class="row map-card__nav hidden">
+                        <ui:Button name="map-card-prev" text="‹" class="round-btn map-card__step" />
+                        <ui:Label name="map-card-index" text="" class="caption grow map-card__index" />
+                        <ui:Button name="map-card-next" text="›" class="round-btn map-card__step" />
+                    </ui:VisualElement>
                     <ui:Button name="map-card-open" text="Deschide" class="btn btn--primary map-card__open hidden" />
                 </ui:VisualElement>
             </ui:VisualElement>

@@ -1109,3 +1109,153 @@
     background-color: var(--surface);
     -unity-background-scale-mode: scale-to-fit;
 }
+
+/* ---------- cont ---------- */
+
+.account-title { margin-top: 12px; }
+.account-intro { margin: 0 0 6px 0; }
+.account-note {
+    margin-top: 12px;
+    padding: 10px 12px;
+    border-radius: 14px;
+    background-color: var(--peach-soft);
+    color: var(--ink);
+}
+.account-error { margin-top: 10px; color: #B83E2A; }
+.account-submit { margin-top: 20px; }
+.account-divider { height: 1px; background-color: var(--line); margin: 18px 0; }
+.account-card {
+    margin: 4px 0 14px 0;
+    padding: 16px 18px;
+    border-width: 1px;
+    border-color: var(--line);
+    border-radius: 20px;
+    background-color: var(--surface);
+}
+.account-card__email { font-size: 19px; margin-bottom: 4px; white-space: normal; }
+.account-confirm {
+    margin-top: 12px;
+    padding: 14px 16px;
+    border-width: 1px;
+    border-color: var(--peach-line);
+    border-radius: 20px;
+    background-color: var(--peach-soft);
+}
+.account-confirm__actions { margin-top: 10px; }
+
+.btn--danger,
+.btn--danger:hover {
+    background-color: var(--surface);
+    color: #B83E2A;
+    border-width: 1px;
+    border-color: var(--peach-line);
+}
+.btn--danger:active { background-color: var(--peach-soft); }
+.btn--danger-solid,
+.btn--danger-solid:hover {
+    background-color: #C9472F;
+    color: #FFFFFF;
+}
+.btn--danger-solid:active { background-color: #B03C26; }
+.btn:disabled { opacity: 0.55; }
+
+/* ---------- harta: „Urme” / „Harta mea” ---------- */
+
+.map-tabs {
+    align-self: center;
+    width: 240px;
+    margin-top: 8px;
+    background-color: rgba(255, 255, 255, 0.92);
+    border-width: 1px;
+    border-color: var(--line);
+}
+
+/* ---------- harta: urme grupate ---------- */
+
+/* Numărul de urme dintr-un grup, în colțul semnului. */
+.map-marker__count {
+    position: absolute;
+    right: -9px;
+    top: -9px;
+    min-width: 20px;
+    height: 20px;
+    padding: 0 5px;
+    border-radius: 10px;
+    background-color: var(--ink);
+    color: #FFFFFF;
+    font-size: 11px;
+    -unity-font: url("Fonts/Figtree-ExtraBold.ttf");
+    -unity-font-definition: initial;
+    -unity-text-align: middle-center;
+    margin: 0;
+}
+.map-card__nav { margin-top: 12px; }
+.map-card__index { -unity-text-align: middle-center; margin: 0 8px; }
+.map-card__step,
+.map-card__step:hover {
+    font-size: 22px;
+    color: var(--ink);
+    -unity-text-align: middle-center;
+}
+
+/* ---------- cont: „Intră în cont” / „Cont nou”, puterea parolei ---------- */
+
+.account-tabs { margin-top: 8px; }
+.account-name { flex-basis: 0; }
+.gap-small { margin-left: 6px; }
+.strength { margin-top: 10px; }
+.strength__bar {
+    flex-basis: 0;
+    height: 6px;
+    border-radius: 3px;
+    background-color: var(--line);
+}
+.strength__bar--weak   { background-color: #D5553B; }
+.strength__bar--medium { background-color: #F2B33D; }
+.strength__bar--strong { background-color: #3FBF8F; }
+.strength__label { margin-top: 6px; }
+.strength__label--weak { color: #B83E2A; }
+
+/* ---------- harta: fereastra cu urmele dintr-un grup ---------- */
+
+.map-group {
+    transition-property: scale, opacity;
+    transition-duration: 0.22s, 0.18s;
+    transition-timing-function: ease-out-back, ease-out-cubic;
+}
+.map-group--enter { scale: 0.85 0.85; opacity: 0; }
+.map-group__scroll { max-height: 300px; margin-top: 12px; }
+.map-group__grid { flex-direction: row; flex-wrap: wrap; margin: 0 -4px; }
+.map-group__item {
+    width: 25%;
+    align-items: center;
+    padding: 8px 2px;
+    border-radius: 18px;
+    transition-property: scale, opacity;
+    transition-duration: 0.25s;
+    transition-timing-function: ease-out-back;
+}
+.map-group__item:active { background-color: var(--bg); }
+.map-group__item--enter { scale: 0.4 0.4; opacity: 0; }
+.map-group__holder { width: 64px; height: 64px; }
+.map-group__shape {
+    position: absolute;
+    left: 0; top: 0;
+    width: 64px;
+    height: 64px;
+    -unity-background-scale-mode: scale-to-fit;
+}
+.map-group__holder--mine {
+    border-width: 2px;
+    border-color: var(--coral);
+    border-radius: 34px;
+}
+.map-group__label {
+    margin: 6px 0 0 0;
+    padding: 0;
+    font-size: 14px;
+    -unity-font: url("Fonts/Fraunces-Italic.ttf");
+    -unity-font-definition: initial;
+    -unity-text-align: middle-center;
+    white-space: normal;
+}

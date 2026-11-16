@@ -14,6 +14,7 @@ import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Repository;
 
+import com.threetimes.backend.common.Viewer;
 import com.threetimes.backend.emotion.Verdict;
 import com.threetimes.backend.trace.TraceDtos.Media;
 import com.threetimes.backend.trace.TraceDtos.Stored;
@@ -28,7 +29,7 @@ public class TraceRepository {
             t.intensity,
             ST_Y(t.location::geometry) AS lat, ST_X(t.location::geometry) AS lng,
             t.altitude, t.height_above_terrain, t.accuracy_meters, t.yaw_accuracy_degrees,
-            t.photo_source, t.duration_seconds, t.created_at, t.owner_hash, t.hidden,
+            t.photo_source, t.duration_seconds, t.created_at, t.owner_hash, t.user_id, t.hidden,
             EXISTS (SELECT 1 FROM trace_media m WHERE m.trace_id = t.id) AS has_media,
             EXISTS (SELECT 1 FROM trace_report r WHERE r.trace_id = t.id AND r.reporter_hash = :me) AS reported
             """;
@@ -39,8 +40,8 @@ public class TraceRepository {
         this.jdbc = jdbc;
     }
 
-    /** Adaugă urma. Întoarce false dacă există deja una cu același id. */
-    public boolean insert(UUID id, TraceDtos.CreateRequest r, String content, String ownerHash, Verdict verdict) {
+    /** Adaugă urma (și contul, dacă e lăsată cu contul deschis). Întoarce false dacă există deja una cu același id. */
+    public boolean insert(UUID id, TraceDtos.CreateRequest r, String content, String ownerHash, UUID user, Verdict verdict) {
         boolean review = Verdict.REVIEW.equals(verdict.verdict());
         var p = new MapSqlParameterSource()
                 .addValue("id", id)
@@ -63,16 +64,17 @@ public class TraceRepository {
                 .addValue("photoSource", r.photoSource(), Types.VARCHAR)
                 .addValue("duration", r.durationSeconds())
                 .addValue("owner", ownerHash)
+                .addValue("user", user, Types.OTHER)
                 .addValue("moderation", review ? Verdict.REVIEW : Verdict.OK)
                 .addValue("moderationReason", review ? verdict.reason() : null, Types.VARCHAR);
         int rows = jdbc.update("""
                 INSERT INTO trace (id, type, content, emotion, shape, color, accent_color, petals, sharpness, motion,
                                    intensity, location, altitude, height_above_terrain,
-                                   accuracy_meters, yaw_accuracy_degrees, photo_source, duration_seconds, owner_hash,
+                                   accuracy_meters, yaw_accuracy_degrees, photo_source, duration_seconds, owner_hash, user_id,
                                    moderation, moderation_reason)
                 VALUES (:id, :type, :content, :emotion, :shape, :color, :accent, :petals, :sharpness, :motion, :intensity,
                         ST_SetSRID(ST_MakePoint(:lng, :lat), 4326)::geography,
-                        :altitude, :height, :accuracy, :yaw, :photoSource, :duration, :owner,
+                        :altitude, :height, :accuracy, :yaw, :photoSource, :duration, :owner, :user,
                         :moderation, :moderationReason)
                 ON CONFLICT (id) DO NOTHING
                 """, p);
@@ -90,8 +92,8 @@ public class TraceRepository {
                 .addValue("data", data));
     }
 
-    public Optional<Stored> find(UUID id, String me) {
-        var p = new MapSqlParameterSource().addValue("id", id).addValue("me", me, Types.CHAR);
+    public Optional<Stored> find(UUID id, Viewer me) {
+        var p = viewer(new MapSqlParameterSource().addValue("id", id), me);
         List<Stored> rows = jdbc.query(
                 "SELECT " + COLUMNS + ", 0.0 AS distance FROM trace t WHERE t.id = :id",
                 p, (rs, n) -> map(rs, me));
@@ -100,21 +102,20 @@ public class TraceRepository {
 
     /**
      * Urmele din jurul unui punct, de la cea mai apropiată. Cele ascunse (raportate) nu apar,
-     * în afară de cele ale telefonului care întreabă.
+     * în afară de cele ale telefonului (sau contului) care întreabă.
      */
-    public List<TraceView> nearby(double lat, double lng, double radiusMeters, int limit, String me) {
-        var p = new MapSqlParameterSource()
+    public List<TraceView> nearby(double lat, double lng, double radiusMeters, int limit, Viewer me) {
+        var p = viewer(new MapSqlParameterSource()
                 .addValue("lat", lat)
                 .addValue("lng", lng)
                 .addValue("radius", radiusMeters)
-                .addValue("limit", limit)
-                .addValue("me", me, Types.CHAR);
+                .addValue("limit", limit), me);
         return jdbc.query("""
                 SELECT %s,
                        ST_Distance(t.location, ST_SetSRID(ST_MakePoint(:lng, :lat), 4326)::geography) AS distance
                 FROM trace t
                 WHERE ST_DWithin(t.location, ST_SetSRID(ST_MakePoint(:lng, :lat), 4326)::geography, :radius)
-                  AND (NOT t.hidden OR t.owner_hash = :me)
+                  AND (NOT t.hidden OR t.owner_hash = :me OR t.user_id = :uid)
                 ORDER BY distance
                 LIMIT :limit
                 """.formatted(COLUMNS), p, (rs, n) -> map(rs, me).view());
@@ -128,11 +129,22 @@ public class TraceRepository {
         return rows.stream().findFirst();
     }
 
-    /** Id-urile tuturor urmelor unui telefon (și ale celor ascunse). */
-    public List<String> idsOf(String ownerHash) {
-        return jdbc.query("SELECT id FROM trace WHERE owner_hash = :me",
-                new MapSqlParameterSource("me", ownerHash),
+    /** Id-urile tuturor urmelor mele: ale telefonului și ale contului (și ale celor ascunse). */
+    public List<String> idsOf(Viewer me) {
+        return jdbc.query("SELECT id FROM trace WHERE owner_hash = :me OR user_id = :uid",
+                viewer(new MapSqlParameterSource(), me),
                 (rs, n) -> rs.getObject("id", UUID.class).toString());
+    }
+
+    /** Toate urmele unui cont, de la cea mai nouă (pentru „Harta mea”). */
+    public List<TraceView> ofUser(Viewer me, int limit) {
+        return jdbc.query("""
+                SELECT %s, 0.0 AS distance
+                FROM trace t
+                WHERE t.user_id = :uid
+                ORDER BY t.created_at DESC
+                LIMIT :limit
+                """.formatted(COLUMNS), viewer(new MapSqlParameterSource("limit", limit), me), (rs, n) -> map(rs, me).view());
     }
 
     public void delete(UUID id) {
@@ -162,8 +174,15 @@ public class TraceRepository {
         return true;
     }
 
-    private static Stored map(ResultSet rs, String me) throws SQLException {
+    /** Parametrii :me (amprenta telefonului) și :uid (contul); oricare poate lipsi. */
+    private static MapSqlParameterSource viewer(MapSqlParameterSource p, Viewer me) {
+        return p.addValue("me", me == null ? null : me.device(), Types.CHAR)
+                .addValue("uid", me == null ? null : me.user(), Types.OTHER);
+    }
+
+    private static Stored map(ResultSet rs, Viewer me) throws SQLException {
         String owner = rs.getString("owner_hash");
+        UUID user = rs.getObject("user_id", UUID.class);
         OffsetDateTime created = rs.getObject("created_at", OffsetDateTime.class);
         var view = new TraceView(
                 rs.getObject("id", UUID.class).toString(),
@@ -187,9 +206,9 @@ public class TraceRepository {
                 rs.getFloat("duration_seconds"),
                 created.withOffsetSameInstant(ZoneOffset.UTC).format(DateTimeFormatter.ISO_OFFSET_DATE_TIME),
                 rs.getBoolean("has_media"),
-                me != null && me.equals(owner),
+                me != null && me.owns(owner, user),
                 rs.getBoolean("reported"),
                 rs.getDouble("distance"));
-        return new Stored(view, owner, rs.getBoolean("hidden"));
+        return new Stored(view, owner, user, rs.getBoolean("hidden"));
     }
 }

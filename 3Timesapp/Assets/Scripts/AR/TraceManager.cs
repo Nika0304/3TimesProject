@@ -120,9 +120,26 @@ namespace ThreeTimes.AR
             mainView.TraceSubmitCheck = PlaceBlockReason;
             mainView.EnsureMedia = EnsureMedia;
             mainView.MapTraces = TracesForMap;
+            mainView.MapMyTraces = MyTracesForMap;
+            mainView.AccountDeleted += ForgetMyTraces;
             mainView.VisibleTraces = VisibleTraces;
             mainView.SetTraceCount(saved.Count);
+            AccountSession.Changed += OnAccountChanged;
             Debug.Log($"[3Times] Urme salvate: {saved.Count}");
+        }
+
+        void OnDestroy()
+        {
+            AccountSession.Changed -= OnAccountChanged;
+        }
+
+        /// <summary>
+        /// S-a deschis sau s-a închis contul: cerem din nou urmele din jur, ca serverul să spună din nou care sunt ale mele
+        /// (cu cont, și cele lăsate de pe alte telefoane).
+        /// </summary>
+        void OnAccountChanged()
+        {
+            nextFetch = 0f;
         }
 
         /// <summary>
@@ -659,6 +676,56 @@ namespace ThreeTimes.AR
                 }
                 done(all);
             }));
+        }
+
+        /// <summary>
+        /// „Harta mea”: urmele contului, de pe orice telefon. Cele lăsate de pe telefonul acesta le luăm de aici
+        /// (au poza / vocea deja pe telefon).
+        /// </summary>
+        void MyTracesForMap(Action<List<SavedTrace>, string> done)
+        {
+            if (!ServerSettings.IsConfigured)
+            {
+                done(null, "„Harta mea” are nevoie de server.");
+                return;
+            }
+            mainView.StartCoroutine(AccountApi.MyTraces((list, error, expired) =>
+            {
+                if (list == null)
+                {
+                    done(null, expired ? "Sesiunea a expirat. Intră din nou în cont." : error);
+                    return;
+                }
+                var result = new List<SavedTrace>(list.Count);
+                foreach (var t in list)
+                {
+                    var local = saved.Find(x => x.id == t.id);
+                    if (local != null) result.Add(local);
+                    else result.Add(remote.TryGetValue(t.id, out var known) ? known : t);
+                }
+                done(result, null);
+            }));
+        }
+
+        /// <summary>
+        /// Contul a fost șters pe server împreună cu urmele lui și cu cele lăsate de pe telefonul acesta:
+        /// le scoatem și de pe telefon (fișiere, scenă), fără să mai cerem ștergerea lor la server.
+        /// </summary>
+        void ForgetMyTraces()
+        {
+            int count = saved.Count;
+            RemoveLocal(new List<SavedTrace>(saved));
+            foreach (var t in new List<SavedTrace>(remote.Values))
+            {
+                if (!t.mine) continue;
+                remote.Remove(t.id);
+                RemoveLive(t.id);
+                count++;
+            }
+            TraceStore.PendingDeletes.Clear();
+            TraceStore.Save(saved);
+            if (tracker.Simulated) mainView.ShowSimulatedTraces(AllTraces());
+            TestLog.Add($"Cont șters: {count} urme scoase de pe telefon");
         }
 
         /// <summary>

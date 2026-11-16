@@ -75,7 +75,11 @@ public final class TraceDtos {
     public record Media(String contentType, byte[] data) {
     }
 
-    /** O urmă din bază, cu ce nu trimitem aplicației (cine a lăsat-o, dacă e ascunsă). */
-    record Stored(TraceView view, String ownerHash, boolean hidden) {
+    /** O urmă din bază, cu ce nu trimitem aplicației (telefonul și contul care au lăsat-o, dacă e ascunsă). */
+    record Stored(TraceView view, String ownerHash, java.util.UUID userId, boolean hidden) {
+    }
+
+    /** Urmele contului, pentru „Harta mea”. */
+    public record MyTracesResponse(List<TraceView> traces) {
     }
 }
