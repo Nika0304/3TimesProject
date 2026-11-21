@@ -194,6 +194,7 @@ GameObject:
   - component: {fileID: 588700846}
   - component: {fileID: 588700845}
   - component: {fileID: 588700851}
+  - component: {fileID: 588700852}
   m_Layer: 0
   m_Name: App
   m_TagString: Untagged
@@ -255,6 +256,9 @@ MonoBehaviour:
   goodHorizontalAccuracy: 10
   goodYawAccuracy: 15
   hysteresis: 1.5
+  preciseHorizontalAccuracy: 1.5
+  preciseYawAccuracy: 5
+  preciseStableSeconds: 1.5
   simLatitude: 45.7527
   simLongitude: 21.2253
   simAltitude: 90
@@ -331,7 +335,48 @@ MonoBehaviour:
   markerPrefab: {fileID: 5854354014270647936, guid: 2a0526f9b568e481892be22a90387e2e, type: 3}
   particleMaterial: {fileID: 2100000, guid: d44961dc131fd49aba3696e682c54602, type: 2}
   distanceAhead: 2
+  heightAboveTerrain: 1.2
   heightBelowCamera: 0.3
+  perimeterMeters: 300
+  openDistanceMeters: 15
+  trueSizeDistance: 10
+  maxDistanceScale: 15
+  maxVisibleTraces: 20
+  switchMarginRatio: 0.1
+  switchMarginMeters: 10
+  crowdedMaxScale: 7
+  perimeterCheckInterval: 2
+  fetchInterval: 30
+  refetchDistance: 75
+  fetchLimit: 100
+  firstFetchTimeout: 6
+  settleSeconds: 0.5
+  fadeInSeconds: 0.8
+  hintAfterSeconds: 10
+--- !u!114 &588700852
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 588700844}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: bee338b10a2864e4c8e97c0b35d95d6d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ThreeTimes.Past.PastManager
+  anchorManager: {fileID: 1086473883}
+  tracker: {fileID: 588700847}
+  mainView: {fileID: 588700846}
+  router: {fileID: 588700848}
+  facadePrefab: {fileID: 8963132571116116300, guid: f2797b802637f4b5695193bfc5483d83, type: 3}
+  latitude: 45.75409965
+  longitude: 21.2259413
+  heading: 195.3
+  scale: 1.035
+  heightOffset: 0
+  visibleRadius: 400
+  riseSeconds: 1.6
 --- !u!1 &1086473881
 GameObject:
   m_ObjectHideFlags: 0

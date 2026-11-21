@@ -105,8 +105,8 @@ namespace ThreeTimes.UI
                 case TimeMode.Past:
                     return new ModeLook
                     {
-                        Label = "Trecut", Word = "1989",
-                        Hint = "Fotografii de arhivă, exact unde au fost făcute.",
+                        Label = "Trecut", Word = "1900",
+                        Hint = "Opera, cum arăta înainte de incendiul din 1920. Privește spre ea din piață.",
                         Primary = "Ascultă ghidul",
                         LabelClass = "mode-label--past", KnobClass = "knob--past"
                     };
