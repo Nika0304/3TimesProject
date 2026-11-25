@@ -21,7 +21,6 @@ namespace ThreeTimes.UI
 
         [Header("Funcții gata (restul afișează „în curând”)")]
         [SerializeField] bool pastReady = false;
-        [SerializeField] bool futureReady = false;
 
         public TimeMode Mode { get; private set; } = TimeMode.Present;
 
@@ -31,6 +30,10 @@ namespace ThreeTimes.UI
         // Acțiunile ecranului. Celelalte componente se abonează aici.
         /// <summary>Utilizatorul a completat și a confirmat o urmă nouă.</summary>
         public event Action<TraceDraft> TraceSubmitted;
+        /// <summary>Utilizatorul a completat și a confirmat o capsulă a timpului (modul Viitor).</summary>
+        public event Action<TraceDraft> CapsuleSubmitted;
+        /// <summary>Întrebat înainte să se trimită o capsulă (server, localizare, cont). Îl setează TraceManager.</summary>
+        public Func<string> CapsuleSubmitCheck { get; set; }
         public event Action GuideRequested;
         public event Action CreateCapsuleRequested;
         public event Action MapRequested;
@@ -87,6 +90,7 @@ namespace ThreeTimes.UI
         Button labelPast, labelPresent, labelFuture;
 
         TraceSheetView traceSheet;
+        CapsuleCardView capsuleCard;
         TraceDetailView traceDetail;
         int traceCount;
         bool dragging;
@@ -182,6 +186,27 @@ namespace ThreeTimes.UI
                 UIRouter.SetVisible(screenLog, true);
             };
             root.Q<Button>("log-back").clicked += () => UIRouter.SetVisible(screenLog, false);
+            // Ceasul de test: „Peste un an” arată urmele la aniversare și capsula anului deschisă.
+            var clockText = root.Q<Label>("log-clock-text");
+            var clockButton = root.Q<Button>("log-clock");
+            void ShowClock()
+            {
+                clockText.text = TestClock.Active
+                    ? $"Acum aplicația e la {RomaniaTime.DateText(RomaniaTime.Today)}: vezi urmele la aniversare și capsula anului deschisă."
+                    : "Azi. „Peste un an” arată cum va fi: urmele la aniversare și capsula anului deschisă.";
+                clockButton.text = TestClock.Active ? "Înapoi la azi" : "Peste un an";
+            }
+            clockButton.clicked += () =>
+            {
+                TestClock.Years = TestClock.Active ? 0 : 1;
+                ThreeTimes.Data.TestLog.Add(TestClock.Active ? "Ceas de test: peste un an" : "Ceas de test: înapoi la azi");
+                router.Toast(TestClock.Active
+                    ? "Aplicația se poartă ca peste un an (doar până o închizi). Se reîncarcă urmele și capsulele…"
+                    : "Înapoi la azi.", 4f);
+                ShowClock();
+                UpdateStatus();
+            };
+            ShowClock();
             root.Q<Button>("log-copy").clicked += () =>
             {
                 GUIUtility.systemCopyBuffer = ThreeTimes.Data.TestLog.Text();
@@ -207,7 +232,7 @@ namespace ThreeTimes.UI
             // Atingerile din zona liberă: le trimitem mai departe în coordonate de ecran (origine jos-stânga).
             root.Q("tap-catcher").RegisterCallback<ClickEvent>(evt =>
             {
-                if (!CameraOn || Mode != TimeMode.Present) return;
+                if (!CameraOn || Mode == TimeMode.Past) return;
                 float width = root.layout.width;
                 if (float.IsNaN(width) || width <= 0f) return;
                 float scale = Screen.width / width;
@@ -215,9 +240,12 @@ namespace ThreeTimes.UI
             });
 
             traceSheet = new TraceSheetView(root, router, this, () => TraceSubmitCheck?.Invoke(), voicePlayer);
+            traceSheet.CapsuleCheck = () => CapsuleSubmitCheck?.Invoke();
+            capsuleCard = new CapsuleCardView(root);
             traceSheet.Submitted += draft =>
             {
-                if (TraceSubmitted != null) TraceSubmitted.Invoke(draft);
+                var target = draft.Capsule ? CapsuleSubmitted : TraceSubmitted;
+                if (target != null) target.Invoke(draft);
                 else router.Toast("Urmele nu sunt încă legate în scenă: rulează Tools → 3Times → 3.");
             };
             root.Q<Button>("about-back").clicked += CloseAbout;
@@ -273,6 +301,7 @@ namespace ThreeTimes.UI
             var keyboard = Keyboard.current;
             if (!initialized || keyboard == null || !keyboard.escapeKey.wasPressedThisFrame) return;
             if (traceDetail.IsOpen) traceDetail.Close();
+            else if (capsuleCard.IsOpen) capsuleCard.Close();
             else if (postcard.IsOpen) postcard.Close();
             else if (postcard.ListOpen) postcard.CloseList();
             else if (map.IsOpen) map.Back();
@@ -328,9 +357,39 @@ namespace ThreeTimes.UI
             if (initialized && Mode == TimeMode.Present) modeHint.text = PresentHint();
         }
 
-        /// <summary>Deschide „ecranul unei urme”.</summary>
+        /// <summary>
+        /// Atingerea unei capsule încă sigilate: încercarea de a o deschide (serverul verifică locul și data).
+        /// Îl setează TraceManager.
+        /// </summary>
+        public Action<ThreeTimes.Data.SavedTrace> OpenCapsule { get; set; }
+
+        /// <summary>Ecranul unei capsule care încă nu se poate deschide (câte urme are, Pune o urmă, Sigilează).</summary>
+        public void ShowCapsuleCard(ThreeTimes.Data.SavedTrace capsule, Action addItem, Action seal, Action delete,
+                                    Action removeMyItems = null) =>
+            capsuleCard.Open(capsule, addItem, seal, delete, removeMyItems);
+
+        /// <summary>Ecranul capsulei anului (înainte de deschidere sau rezumatul anului).</summary>
+        public void ShowYearCard(ThreeTimes.Data.SavedTrace yearCapsule) => capsuleCard.OpenYear(yearCapsule);
+
+        /// <summary>Foaia „Pune o urmă în capsulă”, pentru o capsulă care mai primește urme.</summary>
+        public void OpenAddToCapsule(ThreeTimes.Data.SavedTrace capsule)
+        {
+            if (tracker != null && tracker.Quality != LocalizationQuality.Good)
+            {
+                router.Toast("Localizarea nu e încă destul de precisă. Îndreaptă telefonul spre clădiri.");
+                return;
+            }
+            traceSheet.Open(capsule: true, addTo: capsule.id, addPersonal: capsule.visibility == "PERSONAL");
+        }
+
+        /// <summary>Deschide „ecranul unei urme” (sau, la o capsulă sigilată, încearcă s-o deschidă).</summary>
         public void OpenTrace(ThreeTimes.Data.SavedTrace trace)
         {
+            if (trace != null && trace.IsCapsule && trace.@sealed)
+            {
+                if (OpenCapsule != null) OpenCapsule(trace);
+                return;
+            }
             if (EnsureMedia != null) EnsureMedia(trace, () => traceDetail.Open(trace));
             else traceDetail.Open(trace);
         }
@@ -349,6 +408,13 @@ namespace ThreeTimes.UI
                 foreach (char c in t.id) hash = unchecked(hash * 31 + c);
                 float x = 12 + Mathf.Abs(hash % 76);          // 12–88 % din lățime
                 float y = 32 + Mathf.Abs((hash / 97) % 26);   // 32–58 % din înălțime
+
+                // Capsula încă sigilată: sfera de sticlă, cu data dedesubt.
+                if (t.IsCapsule && t.@sealed)
+                {
+                    simTraces.Add(SimulatedCapsule(t, x, y));
+                    continue;
+                }
 
                 var style = ThreeTimes.Data.TraceStyle.Of(t);
                 int level = style.Level;
@@ -379,8 +445,13 @@ namespace ThreeTimes.UI
                 holder.Add(shape);
                 item.Add(holder);
 
-                var label = new Label(style.Label) { pickingMode = PickingMode.Ignore };
+                // „Acum un an, aici”: urma revenită la aniversare (în AR are scântei aurii).
+                int years = TraceTime.AnniversaryYears(t);
+                string labelText = years == 0 ? style.Label
+                                 : years == 1 ? $"{style.Label} · acum un an" : $"{style.Label} · acum {years} ani";
+                var label = new Label(labelText) { pickingMode = PickingMode.Ignore };
                 label.AddToClassList("sim-trace__label");
+                if (years > 0) label.AddToClassList("sim-trace__label--anniversary");
                 label.style.marginTop = TraceTypeBackdrop.ExtraBelow(t.type, size);
                 item.Add(label);
 
@@ -389,8 +460,36 @@ namespace ThreeTimes.UI
             UpdateSimTracesVisibility();
         }
 
+        VisualElement SimulatedCapsule(ThreeTimes.Data.SavedTrace t, float x, float y)
+        {
+            bool ready = CapsuleText.IsReady(t);
+            var item = new VisualElement();
+            item.AddToClassList("sim-trace");
+            var capsule = t; // copie pentru lambda
+            item.RegisterCallback<ClickEvent>(_ => OpenTrace(capsule));
+            item.style.left = Length.Percent(x);
+            item.style.top = Length.Percent(y);
+
+            var orb = new VisualElement { pickingMode = PickingMode.Ignore };
+            float orbSize = t.IsYearCapsule ? 110 : 70;   // capsula anului e mai mare
+            orb.style.width = orbSize;
+            orb.style.height = orbSize;
+            orb.AddToClassList("sim-capsule__orb");
+            orb.style.backgroundImage = new StyleBackground(CapsuleIcon.Get(ready));
+            item.Add(orb);
+
+            string text = ready ? (t.IsYearCapsule ? $"Capsula anului {t.year}: atinge ca s-o deschizi" : "Atinge ca s-o deschizi")
+                        : t.IsYearCapsule ? $"Capsula anului {t.year} · {t.itemCount} urme"
+                        : t.collecting ? $"{t.itemCount} din {(t.maxItems > 0 ? t.maxItems : 10)} urme"
+                        : CapsuleText.Short(t);
+            var label = new Label(text) { pickingMode = PickingMode.Ignore };
+            label.AddToClassList("sim-trace__label");
+            item.Add(label);
+            return item;
+        }
+
         void UpdateSimTracesVisibility() =>
-            UIRouter.SetVisible(simTraces, CameraOn && Mode == TimeMode.Present && simTraces.childCount > 0);
+            UIRouter.SetVisible(simTraces, CameraOn && Mode != TimeMode.Past && simTraces.childCount > 0);
 
         string PresentHint() =>
             traceCount == 0 ? "Nicio urmă aici încă. Lasă tu prima." :
@@ -419,7 +518,7 @@ namespace ThreeTimes.UI
 
             switch (tracker.Quality)
             {
-                case LocalizationQuality.Good: statusLabel.text = "Localizat" + accuracy; break;
+                case LocalizationQuality.Good: statusLabel.text = "Localizat" + accuracy + (TestClock.Active ? " · ceas de test +1 an" : ""); break;
                 case LocalizationQuality.Low: statusLabel.text = "Precizie scăzută" + accuracy; break;
                 default: statusLabel.text = "Se localizează…"; break;
             }
@@ -444,7 +543,14 @@ namespace ThreeTimes.UI
                     Raise(pastReady ? GuideRequested : null, "Ghidul vocal și fațadele vin în etapa următoare.");
                     break;
                 case TimeMode.Future:
-                    Raise(futureReady ? CreateCapsuleRequested : null, "Capsulele timpului vin după urme.");
+                    if (!CameraOn) { router.Toast("Pornește camera ca să lași o capsulă exact aici."); break; }
+                    if (tracker != null && tracker.Quality != LocalizationQuality.Good)
+                    {
+                        router.Toast("Localizarea nu e încă destul de precisă. Îndreaptă telefonul spre clădiri.");
+                        break;
+                    }
+                    traceSheet.Open(capsule: true);
+                    CreateCapsuleRequested?.Invoke();
                     break;
             }
         }

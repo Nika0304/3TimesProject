@@ -36,6 +36,10 @@ services:
       GEMINI_FALLBACK_MODEL: ${GEMINI_FALLBACK_MODEL:-gemini-flash-latest}
       # Parola paginii de admin (/admin), tot din backend/.env. Fără ea, adminul e oprit.
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+      # Capsulele „peste 1 minut” (doar pentru teste). Pe serverul online: false.
+      CAPSULE_TEST_UNLOCK: ${CAPSULE_TEST_UNLOCK:-true}
+      # Ceasul de test din aplicație (Jurnal de test → „Peste un an”). Pe serverul online: false.
+      TEST_CLOCK: ${TEST_CLOCK:-true}
     ports:
       - "8080:8080"
     restart: unless-stopped

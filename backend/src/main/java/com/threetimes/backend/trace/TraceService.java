@@ -22,7 +22,7 @@ import com.threetimes.backend.trace.TraceDtos.TraceView;
 @Service
 public class TraceService {
 
-    static final int MAX_CONTENT = 280;
+    public static final int MAX_CONTENT = 280;
     static final int MAX_PHOTO_BYTES = 4 * 1024 * 1024;
     static final int MAX_VOICE_BYTES = 3 * 1024 * 1024;
     static final float MAX_VOICE_SECONDS = 31f;
@@ -111,6 +111,9 @@ public class TraceService {
         Stored trace = repository.find(id, me).orElseThrow(ApiException::notFound);
         if (!me.owns(trace.ownerHash(), trace.userId()))
             throw ApiException.forbidden("Poți șterge doar urmele lăsate de tine.");
+        // Ca la capsulele sigilate: o urmă din capsula unui an încheiat nu se mai scoate (rămân contul și adminul).
+        if (repository.lockedInYearCapsule(id))
+            throw ApiException.forbidden("Urma e în capsula anului, care s-a sigilat pe 1 ianuarie: nu se mai poate scoate.");
         repository.delete(id);
     }
 
@@ -124,7 +127,7 @@ public class TraceService {
     }
 
     /** Completează valorile lipsă și verifică ce a trimis telefonul. */
-    private static CreateRequest normalize(CreateRequest r) {
+    public static CreateRequest normalize(CreateRequest r) {
         if (r == null) throw ApiException.badRequest("Lipsește urma.");
         String type = upper(r.type());
         if (!TYPES.contains(type)) throw ApiException.badRequest("Tip necunoscut: " + r.type());
@@ -175,11 +178,11 @@ public class TraceService {
 
         return new CreateRequest(r.id(), type, r.content(), emotion, shape, color, accent, petals, sharpness, motion,
                 intensity, r.latitude(), r.longitude(),
-                altitude, height, accuracy, yaw, photoSource, duration);
+                altitude, height, accuracy, yaw, photoSource, duration, Boolean.TRUE.equals(r.yearCapsule()));
     }
 
     /** Verifică fișierul după conținut (nu după ce pretinde telefonul) și întoarce tipul lui. */
-    private static String checkMedia(CreateRequest r, byte[] media, String content) {
+    public static String checkMedia(CreateRequest r, byte[] media, String content) {
         boolean hasMedia = media != null && media.length > 0;
         switch (r.type()) {
             case "TEXT" -> {
@@ -216,7 +219,7 @@ public class TraceService {
             throw ApiException.badRequest("Coordonate invalide.");
     }
 
-    private static UUID parseOrNew(String id) {
+    public static UUID parseOrNew(String id) {
         if (id == null || id.isBlank()) return UUID.randomUUID();
         String s = id.trim();
         // Aplicația folosește Guid.ToString("N") (fără cratime): îl acceptăm și așa.

@@ -88,7 +88,7 @@ namespace ThreeTimes.AR
 
         // ---------------------------------------------------------------- particule
 
-        static GameObject CreateSystem(string name, Transform parent, Material material, out ParticleSystem system)
+        internal static GameObject CreateSystem(string name, Transform parent, Material material, out ParticleSystem system)
         {
             var go = new GameObject(name);
             go.transform.SetParent(parent, false);
@@ -120,7 +120,7 @@ namespace ThreeTimes.AR
             return go;
         }
 
-        static void Emit(ParticleSystem system, Vector3 position, float size, Color color)
+        internal static void Emit(ParticleSystem system, Vector3 position, float size, Color color)
         {
             var emit = new ParticleSystem.EmitParams
             {

@@ -57,5 +57,16 @@ namespace ThreeTimes.Core
         public Emotion Emotion;
         /// <summary>0 = încet, 1 = mediu, 2 = puternic.</summary>
         public int Intensity;
+
+        /// <summary>E o capsulă a timpului (modul Viitor), nu o urmă.</summary>
+        public bool Capsule;
+        /// <summary>PUBLIC sau PERSONAL (doar cu cont).</summary>
+        public string Visibility;
+        /// <summary>Când se deschide: ISO 8601, UTC.</summary>
+        public string UnlockAt;
+        /// <summary>Urma se pune într-o capsulă care există deja (id-ul ei); gol = capsulă nouă.</summary>
+        public string CapsuleId;
+        /// <summary>„Pune-o și în capsula anului” (doar la urme).</summary>
+        public bool YearCapsule;
     }
 }

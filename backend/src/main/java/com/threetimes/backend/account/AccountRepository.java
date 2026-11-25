@@ -87,8 +87,11 @@ public class AccountRepository {
     /** Urmele lăsate de pe acest telefon fără cont trec în cont (ca să apară în „Harta mea”). */
     public int claimDeviceTraces(String deviceHash, UUID user) {
         if (deviceHash == null) return 0;
-        return jdbc.update("UPDATE trace SET user_id = :u WHERE owner_hash = :d AND user_id IS NULL",
-                new MapSqlParameterSource().addValue("u", user).addValue("d", deviceHash, Types.CHAR));
+        var p = new MapSqlParameterSource().addValue("u", user).addValue("d", deviceHash, Types.CHAR);
+        // Și capsulele lăsate de pe telefon trec în cont (rămân „ale mele” și de pe alt telefon).
+        jdbc.update("UPDATE capsule SET user_id = :u WHERE owner_hash = :d AND user_id IS NULL", p);
+        jdbc.update("UPDATE capsule_item SET user_id = :u WHERE owner_hash = :d AND user_id IS NULL", p);
+        return jdbc.update("UPDATE trace SET user_id = :u WHERE owner_hash = :d AND user_id IS NULL", p);
     }
 
     public int traceCount(UUID user) {
@@ -102,8 +105,10 @@ public class AccountRepository {
      * Sesiunile se șterg odată cu contul (ON DELETE CASCADE). Întoarce câte urme s-au șters.
      */
     public int deleteAccount(UUID user, String deviceHash) {
-        int traces = jdbc.update("DELETE FROM trace WHERE user_id = :u OR owner_hash = :d",
-                new MapSqlParameterSource().addValue("u", user).addValue("d", deviceHash, Types.CHAR));
+        var p = new MapSqlParameterSource().addValue("u", user).addValue("d", deviceHash, Types.CHAR);
+        int traces = jdbc.update("DELETE FROM trace WHERE user_id = :u OR owner_hash = :d", p);
+        jdbc.update("DELETE FROM capsule WHERE user_id = :u OR owner_hash = :d", p);
+        jdbc.update("DELETE FROM capsule_item WHERE user_id = :u OR owner_hash = :d", p);
         jdbc.update("DELETE FROM app_user WHERE id = :u", new MapSqlParameterSource("u", user));
         return traces;
     }

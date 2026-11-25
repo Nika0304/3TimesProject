@@ -92,6 +92,63 @@ curl -X POST http://localhost:8080/api/v1/emotion -H "Content-Type: application/
   -d '{"text":"Mi-e dor de bunica, aici mergeam la inghetata."}'   # fără diacritice: Git Bash nu le trimite în UTF-8
 ```
 
+## Capsulele timpului (modul Viitor)
+
+O capsulă e un loc + o dată, cu **cel mult 10 urme** înăuntru (fiecare: text, poză sau voce, cu emoția și forma ei).
+- **Publică = de grup**: oricine ajunge la ea (cel mult 15 m) își pune urma, până o sigilează cine a creat-o; se
+  sigilează și singură după 7 zile, la 10 urme sau la data deschiderii. Până la deschidere se vede doar câte urme are.
+- **Personală** (doar cu cont): o umple și o deschide doar contul ei.
+- **Deschiderea**: doar în locul ei (15 m) și după dată (minim mâine, maxim 10 ani, la miezul nopții, ora României),
+  verificat pe server; urmele pleacă spre telefon abia atunci. Nu expiră: după dată capsula așteaptă (în aplicație,
+  lumina devine aurie). După deschidere, pentru acel telefon / cont urmele devin urme obișnuite.
+
+```
+GET    /api/v1/capsules/nearby?lat=..&lng=..&radius=300   capsulele din jur (items doar după deschidere)
+POST   /api/v1/capsules              multipart: „capsule” = {id, latitude, longitude, altitude, heightAboveTerrain,
+                                     accuracyMeters, yawAccuracyDegrees, visibility, unlockAt}; „item” = prima urmă
+                                     (JSON ca la urme); „media” = poza / vocea ei
+POST   /api/v1/capsules/{id}/items   multipart „item” + „media”: încă o urmă (de la cel mult 15 m)
+POST   /api/v1/capsules/{id}/seal    creatorul o sigilează
+POST   /api/v1/capsules/{id}/open    {"latitude", "longitude", "accuracyMeters"} → capsula cu urmele, sau 403 cu motivul
+GET    /api/v1/capsules/items/{itemId}/media     după deschidere
+POST   /api/v1/capsules/items/{itemId}/report    după deschidere
+DELETE /api/v1/capsules/items/{itemId}           urma mea (doar până la sigilare)
+DELETE /api/v1/capsules/{id}/items/mine          toate urmele mele din capsulă (doar până la sigilare)
+DELETE /api/v1/capsules/{id}                     capsula creată de mine (după sigilare: doar dacă toate urmele sunt ale mele)
+```
+După sigilare nu se mai schimbă nimic înăuntru (urmele nu se mai scot din aplicație); rămân ștergerea contului
+și adminul (la cerere). Urmele din capsulele publice trec prin moderare (AI), ca urmele; adminul le vede ca
+„Capsulă · se deschide …”, iar pozele și vocile din capsulele publice apar la „Capsule de verificat”.
+Pentru teste, `CAPSULE_TEST_UNLOCK=true` (implicit în docker-compose, doar local) acceptă și „peste 2 minute”.
+Pe un server online: `CAPSULE_TEST_UNLOCK=false`.
+**Limită:** locul îl spune telefonul; serverul verifică distanța față de poziția primită, deci o aplicație modificată
+ar putea trimite o poziție falsă. Data, în schimb, nu poate fi păcălită (e ceasul serverului).
+
+## Cât se vede o urmă (Prezent)
+
+O urmă apare la „urmele din jur” **două săptămâni** de când e lăsată; apoi se retrage și **revine în locul ei la
+fiecare aniversare, o săptămână** („acum un an, aici”), din ziua aniversării (ora României). Regula e în
+TraceRepository.IN_PRESENT și, pentru urmele proprii păstrate pe telefon, în aplicație (Core/TraceTime).
+`/traces/mine` și „Harta mea” arată în continuare toate urmele proprii.
+
+**Ceasul de test:** în aplicație, Meniu → Jurnal de test → „Peste un an”. Aplicația trimite antetul `X-Test-Now`,
+pe care serverul îl folosește doar cu `TEST_CLOCK=true` (implicit în docker-compose, local; pe serverul online: false).
+Așa se văd acum urmele la aniversare și capsula anului deschisă.
+
+## Capsula anului (făcută de aplicație)
+
+Urmele lăsate într-un oraș într-un an, **cu bifa „Pune-o și în capsula anului”** (bifată implicit în aplicație, se
+poate scoate), se strâng într-o sferă mare (Timișoara: Piața Victoriei), care se deschide pe **1 ianuarie** anul
+următor, la miezul nopții (ora României), de la cel mult 25 m. La deschidere: emoțiile anului (câte urme a avut
+fiecare) și 10 urme alese la întâmplare. Urmele ascunse după raportări nu intră; o urmă ștearsă dispare și din capsulă.
+Capsulele sunt în tabelul `year_capsule` (migrarea V8: Timișoara, 2026–2035; orașul = dreptunghiul hărții).
+
+```
+GET  /api/v1/year-capsules/nearby?lat=..&lng=..&radius=300   capsulele anului din jur (câte urme au, câte sunt ale mele)
+POST /api/v1/year-capsules/{id}/open   {"latitude", "longitude", "accuracyMeters"}
+     → după 1 ianuarie și de aproape: "emotions" [{emotion, color, count}] + "items" (urmele alese); altfel 403
+```
+
 ## Moderarea
 
 **AI-ul verifică textul** în același apel cu emoția (câmpurile `verdict` și `verdictReason` din răspuns):

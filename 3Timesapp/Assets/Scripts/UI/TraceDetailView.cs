@@ -104,9 +104,32 @@ namespace ThreeTimes.UI
                 textLabel.text = (textLabel.text + "\n(fișierul urmei lipsește de pe telefon)").Trim();
             UIRouter.SetVisible(textLabel, textLabel.text.Length > 0);
 
-            metaLabel.text = (trace.mine ? "Lăsată de tine, " : "Lăsată ") + When(trace.createdAt);
+            if (trace.IsCapsuleItem)
+            {
+                // O urmă dintr-o capsulă deschisă: când a fost pusă, de cine și pentru ce zi.
+                string who = trace.visibility == "PERSONAL" ? "Din capsula ta personală" : "Dintr-o capsulă a timpului";
+                string by = trace.mine ? "de tine " : "";
+                string forDay = ThreeTimes.Core.RomaniaTime.TryParseUtc(trace.unlockAt, out var unlock)
+                    ? $", pentru {ThreeTimes.Core.RomaniaTime.DateText(ThreeTimes.Core.RomaniaTime.FromUtc(unlock))}"
+                    : "";
+                metaLabel.text = $"{who}: pusă {by}{When(trace.createdAt)}{forDay}.";
+            }
+            else if (ThreeTimes.Core.TraceTime.AnniversaryYears(trace) is int years && years > 0
+                     && ThreeTimes.Core.RomaniaTime.TryParseUtc(trace.createdAt, out var created))
+            {
+                // Urma a revenit la aniversare.
+                string day = ThreeTimes.Core.RomaniaTime.DateText(ThreeTimes.Core.RomaniaTime.FromUtc(created));
+                metaLabel.text = $"{ThreeTimes.Core.TraceTime.AnniversaryText(years)}: lăsată {(trace.mine ? "de tine " : "")}pe {day}.";
+            }
+            else
+            {
+                metaLabel.text = (trace.mine ? "Lăsată de tine, " : "Lăsată ") + When(trace.createdAt);
+            }
+            deleteButton.text = "Șterge urma mea";
             // Urma ta o poți șterge; pe ale altora le poți raporta.
-            UIRouter.SetVisible(deleteButton, trace.mine);
+            // Urmele dintr-o capsulă deschisă nu se mai scot (capsula e sigilată); rămân ștergerea contului și adminul.
+            UIRouter.SetVisible(deleteButton, trace.mine && !trace.IsCapsuleItem &&
+                                              !ThreeTimes.Core.TraceTime.LockedInYearCapsule(trace));
             UIRouter.SetVisible(reportButton, !trace.mine);
             reportButton.text = trace.reported ? "Raportată" : "Raportează";
             reportButton.SetEnabled(!trace.reported);

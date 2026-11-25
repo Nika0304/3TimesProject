@@ -31,6 +31,13 @@ threetimes:
   admin-password: ${ADMIN_PASSWORD:}
   # După câte raportări de la telefoane diferite o urmă e ascunsă până la moderare.
   reports-to-hide: ${REPORTS_TO_HIDE:3}
+  # Capsulele timpului (modul Viitor): se deschid de la cel mult 15 m, de mâine încolo (maxim 10 ani).
+  # test-unlock = true permite și „peste un minut” (doar pentru teste; serverul local îl pornește din docker-compose).
+  # Ceasul de test (Meniu → Jurnal de test din aplicație): antetul X-Test-Now e folosit doar dacă e true.
+  test-clock: ${TEST_CLOCK:false}
+  capsules:
+    open-radius-meters: 15
+    test-unlock: ${CAPSULE_TEST_UNLOCK:false}
   # Limitele cererii „urmele din jur”.
   max-radius-meters: 15000   # harta poate arăta tot orașul
   max-limit: 200

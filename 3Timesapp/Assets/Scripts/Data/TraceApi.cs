@@ -47,6 +47,9 @@ namespace ThreeTimes.Data
             request.SetRequestHeader("X-Device-Id", ServerSettings.DeviceId);
             if (withAccount && AccountSession.IsSignedIn)
                 request.SetRequestHeader("Authorization", "Bearer " + AccountSession.Token);
+            // Ceasul de test (Jurnal de test → „Peste un an”): serverul local îl folosește, cel online îl ignoră.
+            if (ThreeTimes.Core.TestClock.Active)
+                request.SetRequestHeader("X-Test-Now", ThreeTimes.Core.RomaniaTime.Iso(ThreeTimes.Core.TestClock.UtcNow));
         }
 
         /// <summary>Mesajul de eroare pentru utilizator: cel trimis de server, sau unul despre conexiune.</summary>
@@ -206,7 +209,10 @@ namespace ThreeTimes.Data
                 done?.Invoke(file);
                 yield break;
             }
-            using var request = UnityWebRequest.Get($"{Base}/{trace.id}/media");
+            string url = trace.IsCapsuleItem
+                ? $"{ServerSettings.Url}/api/v1/capsules/items/{trace.id}/media"
+                : $"{Base}/{trace.id}/media";
+            using var request = UnityWebRequest.Get(url);
             Prepare(request, UploadTimeoutSeconds);
             yield return request.SendWebRequest();
             if (request.result != UnityWebRequest.Result.Success)
@@ -285,7 +291,10 @@ namespace ThreeTimes.Data
             request.downloadHandler = new DownloadHandlerBuffer();
             Prepare(request);
             yield return request.SendWebRequest();
-            done?.Invoke(request.result == UnityWebRequest.Result.Success || request.responseCode == 404);
+            // 404 = deja ștearsă; 403 = serverul nu o mai lasă ștearsă (de ex. e în capsula unui an încheiat):
+            // în ambele cazuri nu mai are rost să reîncercăm.
+            done?.Invoke(request.result == UnityWebRequest.Result.Success ||
+                         request.responseCode == 404 || request.responseCode == 403);
         }
     }
 }

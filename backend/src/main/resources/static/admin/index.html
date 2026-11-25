@@ -34,6 +34,7 @@
   .badge.hidden { background: #FBE3E1; color: var(--danger); }
   .badge.review { background: var(--warn-bg); color: var(--warn); }
   .badge.reports { background: var(--bg); color: var(--ink); }
+  .badge.capsule { background: var(--ok-bg); color: var(--ok); }
   .text { white-space: pre-wrap; word-break: break-word; font-size: 16px; }
   .text.empty { color: var(--muted); font-style: italic; font-size: 14px; }
   img.photo { width: 100%; max-height: 320px; object-fit: contain; background: var(--bg); border-radius: 10px; }
@@ -62,6 +63,7 @@
     <button data-filter="hidden">Ascunse</button>
     <button data-filter="reported">Raportate</button>
     <button data-filter="review">De verificat (AI)</button>
+    <button data-filter="capsules">Capsule de verificat</button>
   </div>
   <button class="refresh" id="refresh">Reîncarcă</button>
 </header>
@@ -101,13 +103,16 @@
   function matches(t) {
     if (filter === "hidden") return t.hidden;
     if (filter === "reported") return t.reportCount > 0;
-    if (filter === "review") return t.moderation === "review";
+    if (filter === "review") return t.moderation === "review" && t.kind !== "CAPSULE";
+    if (filter === "capsules") return t.kind === "CAPSULE" && t.moderation === "review";
     return true;
   }
 
   function render() {
     grid.replaceChildren();
     const shown = items.filter(matches);
+    // La capsule, întâi cele care se deschid cel mai curând (trebuie verificate înainte).
+    if (filter === "capsules") shown.sort((a, b) => new Date(a.unlockAt) - new Date(b.unlockAt));
     const hidden = items.filter(t => t.hidden).length;
     status.textContent = items.length === 0 ? "" :
       `${items.length} urme de verificat · ${hidden} ascunse după raportări`;
@@ -117,6 +122,9 @@
     }
     for (const t of shown) grid.append(card(t));
   }
+
+  const MONTHS = ["ianuarie","februarie","martie","aprilie","mai","iunie","iulie","august","septembrie","octombrie","noiembrie","decembrie"];
+  const path = t => (t.kind === "CAPSULE" ? "capsules" : "traces");
 
   function card(t) {
     const c = el("div", "card");
@@ -136,7 +144,15 @@
     if (t.hidden) badges.append(el("span", "badge hidden", "Ascunsă"));
     if (t.reportCount > 0) badges.append(el("span", "badge reports",
       t.reportCount === 1 ? "1 raportare" : `${t.reportCount} raportări`));
-    if (t.moderation === "review") badges.append(el("span", "badge review", "De verificat (AI)"));
+    if (t.moderation === "review") badges.append(el("span", "badge review",
+      t.kind === "CAPSULE" && t.type !== "TEXT" && !(t.moderationReason || "").startsWith("Neverificată")
+        ? "De verificat (admin)" : "De verificat (AI)"));
+    if (t.kind === "CAPSULE") {
+      const d = new Date(t.unlockAt);
+      const when = `${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
+      badges.append(el("span", "badge capsule",
+        (t.visibility === "PERSONAL" ? "Capsulă personală" : "Capsulă") + " · se deschide " + when));
+    }
     c.append(badges);
 
     c.append(el("div", t.content ? "text" : "text empty", t.content || "(fără mesaj)"));
@@ -144,13 +160,13 @@
     if (t.hasMedia && t.type === "PHOTO") {
       const img = el("img", "photo");
       img.loading = "lazy";
-      img.src = `/api/v1/admin/traces/${t.id}/media`;
+      img.src = `/api/v1/admin/${path(t)}/${t.id}/media`;
       c.append(img);
     } else if (t.hasMedia && t.type === "VOICE") {
       const audio = el("audio");
       audio.controls = true;
       audio.preload = "none";
-      audio.src = `/api/v1/admin/traces/${t.id}/media`;
+      audio.src = `/api/v1/admin/${path(t)}/${t.id}/media`;
       c.append(audio);
     }
 
@@ -181,7 +197,8 @@
     keep.onclick = () => act(t, c, "POST", "keep");
     const del = el("button", "del", "Șterge");
     del.onclick = () => {
-      if (confirm("Ștergi urma definitiv (cu poza sau vocea ei)?")) act(t, c, "DELETE", "");
+      if (confirm(t.kind === "CAPSULE" ? "Ștergi capsula definitiv (cu poza sau vocea ei)?"
+                                       : "Ștergi urma definitiv (cu poza sau vocea ei)?")) act(t, c, "DELETE", "");
     };
     actions.append(keep, del);
     c.append(actions);
@@ -191,9 +208,9 @@
   async function act(t, c, method, action) {
     c.classList.add("gone");
     try {
-      const r = await fetch(`/api/v1/admin/traces/${t.id}${action ? "/" + action : ""}`, { method });
+      const r = await fetch(`/api/v1/admin/${path(t)}/${t.id}${action ? "/" + action : ""}`, { method });
       if (!r.ok && r.status !== 404) throw new Error((await r.json().catch(() => ({}))).error || "Eroare " + r.status);
-      items = items.filter(x => x.id !== t.id);
+      items = items.filter(x => !(x.id === t.id && x.kind === t.kind));
       render();
     } catch (e) {
       c.classList.remove("gone");

@@ -34,6 +34,20 @@ public class TraceRepository {
             EXISTS (SELECT 1 FROM trace_report r WHERE r.trace_id = t.id AND r.reporter_hash = :me) AS reported
             """;
 
+    /**
+     * O urmă se vede în Prezent două săptămâni de când e lăsată; apoi se retrage și revine în locul ei la fiecare
+     * aniversare, o săptămână („acum un an, aici”), începând din ziua aniversării (ora României).
+     * Aceeași regulă e și în aplicație (Core/TraceTime), pentru urmele proprii păstrate pe telefon.
+     */
+    static final String IN_PRESENT = """
+            (t.created_at > CAST(:now AS timestamptz) - INTERVAL '14 days'
+             OR EXISTS (SELECT 1 FROM generate_series(1, 30) AS k
+                        WHERE CAST(:now AS timestamptz) >= (date_trunc('day', t.created_at AT TIME ZONE 'Europe/Bucharest')
+                                        + make_interval(years => k)) AT TIME ZONE 'Europe/Bucharest'
+                          AND CAST(:now AS timestamptz) < (date_trunc('day', t.created_at AT TIME ZONE 'Europe/Bucharest')
+                                       + make_interval(years => k) + INTERVAL '7 days') AT TIME ZONE 'Europe/Bucharest'))
+            """;
+
     private final NamedParameterJdbcTemplate jdbc;
 
     public TraceRepository(NamedParameterJdbcTemplate jdbc) {
@@ -66,16 +80,17 @@ public class TraceRepository {
                 .addValue("owner", ownerHash)
                 .addValue("user", user, Types.OTHER)
                 .addValue("moderation", review ? Verdict.REVIEW : Verdict.OK)
-                .addValue("moderationReason", review ? verdict.reason() : null, Types.VARCHAR);
+                .addValue("moderationReason", review ? verdict.reason() : null, Types.VARCHAR)
+                .addValue("yearCapsule", Boolean.TRUE.equals(r.yearCapsule()));
         int rows = jdbc.update("""
                 INSERT INTO trace (id, type, content, emotion, shape, color, accent_color, petals, sharpness, motion,
                                    intensity, location, altitude, height_above_terrain,
                                    accuracy_meters, yaw_accuracy_degrees, photo_source, duration_seconds, owner_hash, user_id,
-                                   moderation, moderation_reason)
+                                   moderation, moderation_reason, year_capsule)
                 VALUES (:id, :type, :content, :emotion, :shape, :color, :accent, :petals, :sharpness, :motion, :intensity,
                         ST_SetSRID(ST_MakePoint(:lng, :lat), 4326)::geography,
                         :altitude, :height, :accuracy, :yaw, :photoSource, :duration, :owner, :user,
-                        :moderation, :moderationReason)
+                        :moderation, :moderationReason, :yearCapsule)
                 ON CONFLICT (id) DO NOTHING
                 """, p);
         return rows == 1;
@@ -109,16 +124,30 @@ public class TraceRepository {
                 .addValue("lat", lat)
                 .addValue("lng", lng)
                 .addValue("radius", radiusMeters)
-                .addValue("limit", limit), me);
+                .addValue("limit", limit)
+                .addValue("now", com.threetimes.backend.common.TestClock.nowForSql()), me);
         return jdbc.query("""
                 SELECT %s,
                        ST_Distance(t.location, ST_SetSRID(ST_MakePoint(:lng, :lat), 4326)::geography) AS distance
                 FROM trace t
                 WHERE ST_DWithin(t.location, ST_SetSRID(ST_MakePoint(:lng, :lat), 4326)::geography, :radius)
                   AND (NOT t.hidden OR t.owner_hash = :me OR t.user_id = :uid)
+                  AND %s
                 ORDER BY distance
                 LIMIT :limit
-                """.formatted(COLUMNS), p, (rs, n) -> map(rs, me).view());
+                """.formatted(COLUMNS, IN_PRESENT), p, (rs, n) -> map(rs, me).view());
+    }
+
+    /** Urma e în capsula unui an deja încheiat (de la 1 ianuarie anul următor, ora României)? */
+    public boolean lockedInYearCapsule(UUID id) {
+        Boolean locked = jdbc.queryForObject("""
+                SELECT year_capsule AND CAST(:now AS timestamptz) >= make_timestamptz(
+                        extract(year FROM created_at AT TIME ZONE 'Europe/Bucharest')::int + 1, 1, 1, 0, 0, 0,
+                        'Europe/Bucharest')
+                FROM trace WHERE id = :id
+                """, new MapSqlParameterSource().addValue("id", id)
+                .addValue("now", com.threetimes.backend.common.TestClock.nowForSql()), Boolean.class);
+        return Boolean.TRUE.equals(locked);
     }
 
     public Optional<Media> media(UUID traceId) {

@@ -31,7 +31,8 @@ public final class TraceDtos {
             Float accuracyMeters,
             Float yawAccuracyDegrees,
             String photoSource,         // SELFIE, PLACE, PLACE_WITH_TRACES (doar la poză)
-            Float durationSeconds       // doar la voce
+            Float durationSeconds,      // doar la voce
+            Boolean yearCapsule         // „Pune-o și în capsula anului” (bifat de utilizator)
     ) {
     }
 

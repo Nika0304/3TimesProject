@@ -431,6 +431,11 @@
                     <ui:VisualElement class="topbar-spacer" />
                 </ui:VisualElement>
                 <ui:Label text="Aplicația notează singură localizările și urmele. Cele mai noi sunt sus." class="caption log-intro" />
+                <ui:VisualElement class="log-clock">
+                    <ui:Label text="Ceasul de test" class="log-clock-title" />
+                    <ui:Label name="log-clock-text" text="Azi." class="caption log-clock-text" />
+                    <ui:Button name="log-clock" text="Peste un an" class="btn btn--secondary log-clock-btn" />
+                </ui:VisualElement>
                 <ui:ScrollView class="grow log-scroll">
                     <ui:Label name="log-text" text="" class="log-text" />
                 </ui:ScrollView>
@@ -447,12 +452,14 @@
             <ui:VisualElement name="trace-sheet" class="trace-sheet trace-sheet--closed">
                 <ui:VisualElement class="sheet-handle" />
                 <ui:VisualElement class="topbar">
-                    <ui:Label text="Lasă o urmă" class="title title--big" />
+                    <ui:Label name="trace-title" text="Lasă o urmă" class="title title--big" />
                     <ui:Button name="trace-close" class="round-btn">
                         <ui:VisualElement class="icon icon--close" picking-mode="Ignore" />
                     </ui:Button>
                 </ui:VisualElement>
 
+                <!-- Conținutul foii se derulează; butonul de jos rămâne mereu vizibil -->
+                <ui:ScrollView name="trace-scroll" class="trace-scroll" vertical-scroller-visibility="Hidden" horizontal-scroller-visibility="Hidden">
                 <ui:VisualElement class="segments">
                     <ui:Button name="trace-type-text" text="Text" class="seg seg--active" />
                     <ui:Button name="trace-type-photo" text="Poză" class="seg" />
@@ -518,11 +525,73 @@
                     <ui:Button name="intensity-2" text="puternic" class="seg" />
                 </ui:VisualElement>
 
-                <ui:VisualElement class="trace-preview">
-                    <ui:VisualElement name="trace-shape" class="trace-shape trace-shape--1 shape--joy-1" />
+                <!-- Doar la capsule: data deschiderii și cine o poate deschide -->
+                <ui:VisualElement name="capsule-panel" class="capsule-panel hidden">
+                    <ui:Label text="Când se deschide?" class="field-label" />
+                    <ui:VisualElement class="segments capsule-presets">
+                        <ui:Button name="capsule-preset-test" text="2 min" class="seg hidden" />
+                        <ui:Button name="capsule-preset-0" text="o lună" class="seg" />
+                        <ui:Button name="capsule-preset-1" text="un an" class="seg seg--active" />
+                        <ui:Button name="capsule-preset-2" text="5 ani" class="seg" />
+                        <ui:Button name="capsule-preset-3" text="10 ani" class="seg" />
+                    </ui:VisualElement>
+                    <ui:VisualElement class="row capsule-date">
+                        <ui:VisualElement class="row capsule-step">
+                            <ui:Button name="capsule-day-down" text="‹" class="capsule-arrow" />
+                            <ui:Label name="capsule-day" text="1" class="capsule-value" />
+                            <ui:Button name="capsule-day-up" text="›" class="capsule-arrow" />
+                        </ui:VisualElement>
+                        <ui:VisualElement class="row capsule-step capsule-step--wide">
+                            <ui:Button name="capsule-month-down" text="‹" class="capsule-arrow" />
+                            <ui:Label name="capsule-month" text="ianuarie" class="capsule-value" />
+                            <ui:Button name="capsule-month-up" text="›" class="capsule-arrow" />
+                        </ui:VisualElement>
+                        <ui:VisualElement class="row capsule-step">
+                            <ui:Button name="capsule-year-down" text="‹" class="capsule-arrow" />
+                            <ui:Label name="capsule-year" text="2027" class="capsule-value" />
+                            <ui:Button name="capsule-year-up" text="›" class="capsule-arrow" />
+                        </ui:VisualElement>
+                    </ui:VisualElement>
+                    <ui:VisualElement class="segments capsule-visibility">
+                        <ui:Button name="capsule-public" text="Pentru oricine" class="seg seg--active" />
+                        <ui:Button name="capsule-personal" text="Doar pentru mine" class="seg" />
+                    </ui:VisualElement>
+                    <ui:Label name="capsule-note" text="Se deschide doar aici, după data aleasă." class="caption suggestion" />
                 </ui:VisualElement>
 
-                <ui:Button name="trace-submit" text="Lasă urma aici" class="btn btn--primary" />
+                <ui:Button name="trace-year" class="year-row">
+                    <ui:VisualElement name="trace-year-check" class="year-check year-check--on" picking-mode="Ignore">
+                        <ui:VisualElement class="year-tick" picking-mode="Ignore" />
+                    </ui:VisualElement>
+                    <ui:Label name="trace-year-label" text="Pune-o și în capsula anului" class="year-label" picking-mode="Ignore" />
+                </ui:Button>
+
+                <ui:VisualElement name="trace-preview" class="trace-preview">
+                    <ui:VisualElement name="trace-shape" class="trace-shape trace-shape--1 shape--joy-1" />
+                </ui:VisualElement>
+                </ui:ScrollView>
+
+                <ui:Button name="trace-submit" text="Lasă urma aici" class="btn btn--primary trace-submit" />
+            </ui:VisualElement>
+        </ui:VisualElement>
+
+        <!-- Ecranul unei capsule (cât se umple sau până la data deschiderii) -->
+        <ui:VisualElement name="capsule-overlay" class="fill hidden">
+            <ui:Button name="capsule-dim" class="sheet-dim sheet-dim--hidden" />
+            <ui:VisualElement name="capsule-card" class="detail-card detail-card--closed">
+                <ui:VisualElement class="row">
+                    <ui:VisualElement name="capsule-card-icon" class="detail-shape" />
+                    <ui:Label name="capsule-card-title" text="Capsulă a timpului" class="detail-emotion capsule-card-title" />
+                </ui:VisualElement>
+                <ui:Label name="capsule-card-count" text="" class="detail-text" />
+                <ui:Label name="capsule-card-text" text="" class="caption" />
+                <ui:Button name="capsule-card-add" text="Pune o urmă în capsulă" class="btn btn--primary capsule-card-btn" />
+                <ui:VisualElement class="row detail-actions">
+                    <ui:Button name="capsule-card-seal" text="Sigilează acum" class="btn btn--secondary grow" />
+                    <ui:Button name="capsule-card-close" text="Închide" class="btn btn--dark grow gap-left" />
+                </ui:VisualElement>
+                <ui:Button name="capsule-card-remove-mine" text="Scoate urmele mele" class="btn btn--ghost" />
+                <ui:Button name="capsule-card-delete" text="Șterge capsula" class="btn btn--ghost" />
             </ui:VisualElement>
         </ui:VisualElement>
 

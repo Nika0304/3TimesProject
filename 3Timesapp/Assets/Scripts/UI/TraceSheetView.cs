@@ -23,6 +23,29 @@ namespace ThreeTimes.UI
         readonly Func<string> submitCheck;
         Button submitButton;
         bool checking;   // verificarea textului (AI) e în curs
+
+        // Capsula timpului (modul Viitor): aceeași foaie, cu data deschiderii și cine o poate deschide.
+        bool capsuleMode;
+        string addingTo;       // id-ul capsulei în care se pune urma (gol = capsulă nouă)
+        Label title;
+        ScrollView scroll;
+        Button yearRow;
+        VisualElement yearCheck;
+        Label yearLabel;
+        bool yearOn = true;
+        VisualElement capsulePanel, preview;
+        Label capsuleDay, capsuleMonth, capsuleYear, capsuleNote;
+        readonly Button[] presets = new Button[4];
+        Button presetTest, visPublic, visPersonal;
+        DateTime unlockDate;   // data aleasă (ora României)
+        bool personal, testMinute;
+        static readonly int[] PresetMonths = { 1, 12, 60, 120 };
+
+        /// <summary>La capsule: de ce nu se poate trimite acum (mesaj), sau null. Îl setează TraceManager.</summary>
+        public Func<string> CapsuleCheck { get; set; }
+
+        /// <summary>Doar în Editor și în build-urile de test: „peste 1 minut”, ca deschiderea să se poată încerca.</summary>
+        static bool AllowTestMinute => Application.isEditor || Debug.isDebugBuild;
         int openCount;   // crește la fiecare deschidere: un răspuns venit după închidere se ignoră
         readonly VoicePlayer player;
         readonly PhotoCaptureView capture;
@@ -111,6 +134,7 @@ namespace ThreeTimes.UI
             root.Q<Button>("trace-dim").clicked += () => Close();
             submitButton = root.Q<Button>("trace-submit");
             submitButton.clicked += Submit;
+            SetupCapsule(root);
 
             kinds[0] = root.Q<Button>("trace-type-text");
             kinds[1] = root.Q<Button>("trace-type-photo");
@@ -161,11 +185,38 @@ namespace ThreeTimes.UI
             RefreshMedia();
         }
 
-        public void Open()
+        /// <param name="capsule">true = „Creează o capsulă” (Viitor); false = „Lasă o urmă” (Prezent).</param>
+        /// <param name="addTo">Id-ul unei capsule existente în care se pune urma (fără dată și tip).</param>
+        /// <param name="addPersonal">Capsula existentă e personală (urma nu trece prin moderare).</param>
+        public void Open(bool capsule = false, string addTo = null, bool addPersonal = false)
         {
             if (IsOpen) return;
             IsOpen = true;
             openCount++;
+            addingTo = addTo;
+            capsuleMode = capsule || addTo != null;
+            if (scroll != null) scroll.scrollOffset = Vector2.zero;
+            if (yearRow != null)
+            {
+                int year = RomaniaTime.Today.Year;
+                yearLabel.text = $"Pune-o și în capsula anului {year}. Se deschide pe 1 ianuarie {year + 1}, " +
+                                 "cu toate urmele din oraș.";
+                yearOn = true;
+                yearCheck.EnableInClassList("year-check--on", true);
+                UIRouter.SetVisible(yearRow, !(capsule || addTo != null));
+            }
+            title.text = addTo != null ? "Pune o urmă în capsulă" : capsule ? "Creează o capsulă" : "Lasă o urmă";
+            UIRouter.SetVisible(capsulePanel, capsule && addTo == null);
+            UIRouter.SetVisible(preview, !(capsule && addTo == null));   // la capsula nouă, data ia locul previzualizării
+            submitButton.text = SubmitText;
+            personal = addTo != null && addPersonal;
+            if (capsule && addTo == null)
+            {
+                personal = false;
+                testMinute = false;
+                SetUnlock(RomaniaTime.Today.AddMonths(PresetMonths[1]));
+                RefreshCapsule();
+            }
             text.value = "";
             options = TraceStyle.DefaultOptions();
             selected = 0;
@@ -223,6 +274,19 @@ namespace ThreeTimes.UI
             var look = options[selected].Copy();
             look.intensity = intensity;
             var draft = new TraceDraft { Text = message, Look = look, Intensity = intensity };
+            draft.YearCapsule = !capsuleMode && yearOn;
+            if (capsuleMode)
+            {
+                if (addingTo == null && personal && !AccountSession.IsSignedIn)
+                {
+                    router.Toast("O capsulă doar pentru tine cere cont: Meniu → Cont.", 4f);
+                    return;
+                }
+                draft.Capsule = true;
+                draft.CapsuleId = addingTo;
+                draft.Visibility = personal ? "PERSONAL" : "PUBLIC";
+                draft.UnlockAt = RomaniaTime.Iso(testMinute ? TestClock.UtcNow.AddSeconds(150) : RomaniaTime.MidnightUtc(unlockDate));
+            }
             switch (kind)
             {
                 case TraceKind.Text:
@@ -245,7 +309,7 @@ namespace ThreeTimes.UI
             }
 
             // Verificăm înainte să închidem, ca poza sau vocea să nu se piardă dacă trebuie să mai aștepți.
-            string blocked = submitCheck?.Invoke();
+            string blocked = Check();
             if (blocked != null)
             {
                 router.Toast(blocked, 4f);
@@ -253,7 +317,8 @@ namespace ThreeTimes.UI
             }
 
             // Textul trece întâi prin moderare (AI, pe server). Dacă e refuzat, foaia rămâne deschisă și se poate corecta.
-            if (message.Length > 0 && ServerSettings.IsConfigured)
+            // Capsulele „doar pentru mine” nu le citește nimeni altcineva, deci nu trec prin moderare.
+            if (message.Length > 0 && ServerSettings.IsConfigured && !(capsuleMode && personal))
             {
                 if (checking) return;
                 SetChecking(true);
@@ -279,7 +344,7 @@ namespace ThreeTimes.UI
         void Finish(TraceDraft draft)
         {
             // Precizia se poate schimba cât așteptăm verificarea: mai întrebăm o dată.
-            string blocked = submitCheck?.Invoke();
+            string blocked = Check();
             if (blocked != null)
             {
                 router.Toast(blocked, 4f);
@@ -292,8 +357,108 @@ namespace ThreeTimes.UI
         void SetChecking(bool on)
         {
             checking = on;
-            submitButton.text = on ? "Se verifică…" : "Lasă urma aici";
+            submitButton.text = on ? "Se verifică…" : SubmitText;
             submitButton.SetEnabled(!on);
+        }
+
+        string SubmitText => addingTo != null ? "Pune urma în capsulă"
+                           : capsuleMode ? "Creează capsula aici"
+                           : "Lasă urma aici";
+
+        string Check() => capsuleMode ? (CapsuleCheck ?? submitCheck)?.Invoke() : submitCheck?.Invoke();
+
+        // ---------------------------------------------------------------- capsula: data și cine o deschide
+
+        void SetupCapsule(VisualElement root)
+        {
+            title = root.Q<Label>("trace-title");
+            scroll = root.Q<ScrollView>("trace-scroll");
+            yearRow = root.Q<Button>("trace-year");
+            yearCheck = root.Q("trace-year-check");
+            yearLabel = root.Q<Label>("trace-year-label");
+            yearRow.clicked += () =>
+            {
+                yearOn = !yearOn;
+                yearCheck.EnableInClassList("year-check--on", yearOn);
+            };
+            capsulePanel = root.Q("capsule-panel");
+            preview = root.Q("trace-preview");
+            capsuleDay = root.Q<Label>("capsule-day");
+            capsuleMonth = root.Q<Label>("capsule-month");
+            capsuleYear = root.Q<Label>("capsule-year");
+            capsuleNote = root.Q<Label>("capsule-note");
+            visPublic = root.Q<Button>("capsule-public");
+            visPersonal = root.Q<Button>("capsule-personal");
+            presetTest = root.Q<Button>("capsule-preset-test");
+            UIRouter.SetVisible(presetTest, AllowTestMinute);
+            presetTest.clicked += () => { testMinute = true; RefreshCapsule(); };
+
+            for (int i = 0; i < presets.Length; i++)
+            {
+                int months = PresetMonths[i];
+                presets[i] = root.Q<Button>("capsule-preset-" + i);
+                presets[i].clicked += () =>
+                {
+                    testMinute = false;
+                    SetUnlock(RomaniaTime.Today.AddMonths(months));
+                    RefreshCapsule();
+                };
+            }
+
+            root.Q<Button>("capsule-day-down").clicked += () => Step(d => d.AddDays(-1));
+            root.Q<Button>("capsule-day-up").clicked += () => Step(d => d.AddDays(1));
+            root.Q<Button>("capsule-month-down").clicked += () => Step(d => d.AddMonths(-1));
+            root.Q<Button>("capsule-month-up").clicked += () => Step(d => d.AddMonths(1));
+            root.Q<Button>("capsule-year-down").clicked += () => Step(d => d.AddYears(-1));
+            root.Q<Button>("capsule-year-up").clicked += () => Step(d => d.AddYears(1));
+
+            visPublic.clicked += () => { personal = false; RefreshCapsule(); };
+            visPersonal.clicked += () =>
+            {
+                if (!AccountSession.IsSignedIn)
+                {
+                    router.Toast("O capsulă doar pentru tine cere cont: Meniu → Cont.", 4f);
+                    return;
+                }
+                personal = true;
+                RefreshCapsule();
+            };
+        }
+
+        void Step(Func<DateTime, DateTime> change)
+        {
+            testMinute = false;
+            SetUnlock(change(unlockDate));
+            RefreshCapsule();
+        }
+
+        /// <summary>Data deschiderii: cel mai devreme mâine, cel mai târziu peste 10 ani.</summary>
+        void SetUnlock(DateTime date)
+        {
+            var min = RomaniaTime.Today.AddDays(1);
+            var max = RomaniaTime.Today.AddYears(10);
+            unlockDate = date.Date < min ? min : date.Date > max ? max : date.Date;
+        }
+
+        void RefreshCapsule()
+        {
+            capsuleDay.text = unlockDate.Day.ToString();
+            capsuleMonth.text = RomaniaTime.Months[unlockDate.Month - 1];
+            capsuleYear.text = unlockDate.Year.ToString();
+
+            presetTest.EnableInClassList("seg--active", testMinute);
+            for (int i = 0; i < presets.Length; i++)
+                presets[i].EnableInClassList("seg--active",
+                    !testMinute && unlockDate == RomaniaTime.Today.AddMonths(PresetMonths[i]).Date);
+            visPublic.EnableInClassList("seg--active", !personal);
+            visPersonal.EnableInClassList("seg--active", personal);
+
+            string when = testMinute
+                ? "peste două minute (test)"
+                : $"pe {RomaniaTime.DateText(unlockDate)} ({RomaniaTime.Until(RomaniaTime.MidnightUtc(unlockDate))})";
+            capsuleNote.text = personal
+                ? $"Se deschide doar aici, {when}. O poți deschide doar tu, din contul tău."
+                : $"Se deschide doar aici, {when}. Până atunci nimeni nu vede ce ai scris, nici tu.";
         }
 
         // ---------------------------------------------------------------- tipul urmei

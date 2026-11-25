@@ -87,6 +87,8 @@ namespace ThreeTimes.AR
             public GameObject anchor;
             public Transform root;   // se mărește cu distanța
             public Collider touch;
+            public CapsuleVisual capsuleVisual; // doar la capsulele încă sigilate
+            public List<Collider> extraTouches;  // urmele dintr-o capsulă deschisă (fiecare se atinge separat)
         }
 
         readonly Dictionary<string, LiveTrace> live = new Dictionary<string, LiveTrace>();
@@ -95,6 +97,10 @@ namespace ThreeTimes.AR
         readonly HashSet<string> failed = new HashSet<string>();
         List<SavedTrace> saved = new List<SavedTrace>();                                  // urmele mele, salvate pe telefon
         readonly Dictionary<string, SavedTrace> remote = new Dictionary<string, SavedTrace>(); // urmele din jur, de la server
+        readonly Dictionary<string, SavedTrace> capsules = new Dictionary<string, SavedTrace>(); // capsulele din jur, de la server
+        bool opening, creatingCapsule;
+        readonly HashSet<string> emergeNext = new HashSet<string>();
+        readonly HashSet<string> justOpened = new HashSet<string>(); // deschise acum: rămân în Viitor până se schimbă modul // capsule chiar acum deschise: urmele ies din centru
 
         bool fetching, fetchedOnce, serverWarned;
         float nextFetch;
@@ -123,20 +129,40 @@ namespace ThreeTimes.AR
             mainView.MapMyTraces = MyTracesForMap;
             mainView.AccountDeleted += ForgetMyTraces;
             mainView.VisibleTraces = VisibleTraces;
+            mainView.CapsuleSubmitted += PlaceCapsule;
+            mainView.CapsuleSubmitCheck = CapsuleBlockReason;
+            mainView.OpenCapsule = OpenCapsule;
+            mainView.ModeChanged += OnModeChanged;
             mainView.SetTraceCount(saved.Count);
             AccountSession.Changed += OnAccountChanged;
+            TestClock.Changed += OnTestClockChanged;
             Debug.Log($"[3Times] Urme salvate: {saved.Count}");
         }
 
         void OnDestroy()
         {
             AccountSession.Changed -= OnAccountChanged;
+            TestClock.Changed -= OnTestClockChanged;
         }
 
         /// <summary>
         /// S-a deschis sau s-a închis contul: cerem din nou urmele din jur, ca serverul să spună din nou care sunt ale mele
         /// (cu cont, și cele lăsate de pe alte telefoane).
         /// </summary>
+        /// <summary>S-a mutat ceasul de test: cerem din nou urmele și capsulele și refacem ce se vede.</summary>
+        void OnTestClockChanged()
+        {
+            nextFetch = 0f;
+            // Capsulele anului vin din nou de la server (cu ora mutată): altă stare, alt loc.
+            foreach (var c in new List<SavedTrace>(capsules.Values))
+            {
+                if (!c.IsYearCapsule) continue;
+                capsules.Remove(c.id);
+                RemoveLive(c.id);
+            }
+            OnModeChanged(mainView.Mode);
+        }
+
         void OnAccountChanged()
         {
             nextFetch = 0f;
@@ -190,7 +216,7 @@ namespace ThreeTimes.AR
                 if (!simShown)
                 {
                     simShown = true;
-                    mainView.ShowSimulatedTraces(AllTraces());
+                    mainView.ShowSimulatedTraces(ShownForSim());
                 }
                 MaybeFetch();
                 return;
@@ -233,7 +259,7 @@ namespace ThreeTimes.AR
         List<(SavedTrace trace, float distance)> Candidates(GeoFix f)
         {
             var list = new List<(SavedTrace trace, float distance)>();
-            foreach (var t in AllTraces())
+            foreach (var t in Shown())
             {
                 float d = DistanceMeters(f.Latitude, f.Longitude, t.latitude, t.longitude);
                 if (d <= perimeterMeters) list.Add((t, d));
@@ -262,7 +288,7 @@ namespace ThreeTimes.AR
                     msg += $" (cele mai apropiate {maxVisibleTraces}, până la {candidates[shown - 1].distance:0} m)";
                 else
                     msg += $" aflate în {perimeterMeters:0} m";
-                int hidden = AllTraces().Count - shown;
+                int hidden = Shown().Count - shown;
                 if (hidden > 0) msg += $" · {hidden} nu se văd";
                 Debug.Log($"[3Times] {msg}");
                 TestLog.Add(msg);
@@ -287,7 +313,7 @@ namespace ThreeTimes.AR
 
             // Distanța urmelor de acum (pentru cele șterse între timp, infinit).
             var distanceOf = new Dictionary<string, float>();
-            foreach (var t in AllTraces())
+            foreach (var t in Shown())
                 distanceOf[t.id] = DistanceMeters(f.Latitude, f.Longitude, t.latitude, t.longitude);
             float Dist(string id) => distanceOf.TryGetValue(id, out var d) ? d : float.MaxValue;
 
@@ -353,15 +379,17 @@ namespace ThreeTimes.AR
 
             Vector3 toTrace = l.anchor.transform.position - cam.transform.position;
             float distance = new Vector2(toTrace.x, toTrace.z).magnitude;
-            if (distance <= openDistanceMeters)
+            float reach = l.trace.IsYearCapsule ? 25f : openDistanceMeters;   // sfera anului e mare
+            if (distance <= reach)
             {
                 mainView.OpenTrace(l.trace);
                 return;
             }
 
             int shown = RoundTo(distance, distance < 50f ? 5 : 10);
-            int remaining = Mathf.Max(5, RoundTo(distance - openDistanceMeters + 2.5f, 5));
-            router.Toast($"Urma e la vreo {shown} m, {Direction(cam.transform, toTrace)}. " +
+            int remaining = Mathf.Max(5, RoundTo(distance - reach + 2.5f, 5));
+            string noun = l.trace.IsYearCapsule ? "Capsula anului" : l.trace.IsCapsule ? "Capsula" : "Urma";
+            router.Toast($"{noun} e la vreo {shown} m, {Direction(cam.transform, toTrace)}. " +
                          $"Mai mergi vreo {remaining} m spre ea ca s-o poți deschide.", 5f);
         }
 
@@ -390,6 +418,11 @@ namespace ThreeTimes.AR
 
         void Report(SavedTrace trace)
         {
+            if (trace.IsCapsuleItem)
+            {
+                ReportCapsuleItem(trace);
+                return;
+            }
             if (trace.mine)
             {
                 router.Toast("Asta e urma ta. O poți șterge, dacă vrei.");
@@ -419,9 +452,24 @@ namespace ThreeTimes.AR
 
         void Delete(SavedTrace trace)
         {
+            if (trace.IsCapsuleItem)
+            {
+                DeleteCapsuleItem(trace);
+                return;
+            }
+            if (trace.IsCapsule)
+            {
+                DeleteCapsule(trace);
+                return;
+            }
             if (!trace.mine)
             {
                 router.Toast("Poți șterge doar urmele lăsate de tine.");
+                return;
+            }
+            if (TraceTime.LockedInYearCapsule(trace))
+            {
+                router.Toast("Urma e în capsula anului, care s-a sigilat pe 1 ianuarie: nu se mai poate scoate.", 5f);
                 return;
             }
             saved.Remove(trace);
@@ -435,7 +483,7 @@ namespace ThreeTimes.AR
 
             RemoveLive(trace.id);
             mainView.SetTraceCount(saved.Count);
-            if (tracker.Simulated) mainView.ShowSimulatedTraces(AllTraces());
+            if (tracker.Simulated) mainView.ShowSimulatedTraces(ShownForSim());
             Debug.Log($"[3Times] Urmă ștearsă: {trace.id}");
             TestLog.Add("Urmă ștearsă");
             router.Toast("Urma a fost ștearsă.");
@@ -443,19 +491,74 @@ namespace ThreeTimes.AR
 
         // ---------------------------------------------------------------- server
 
-        /// <summary>Toate urmele cunoscute: ale mele (de pe telefon) și cele din jur (de la server), fără dubluri.</summary>
+        /// <summary>
+        /// Urmele care se văd acum în Prezent: ale mele (de pe telefon) și cele din jur (de la server), fără dubluri.
+        /// O urmă se vede două săptămâni, apoi doar la aniversare, o săptămână (TraceTime).
+        /// </summary>
         List<SavedTrace> AllTraces()
         {
-            var all = new List<SavedTrace>(saved);
+            var all = new List<SavedTrace>();
             var ids = new HashSet<string>();
-            foreach (var t in saved) ids.Add(t.id);
+            foreach (var t in saved)
+            {
+                ids.Add(t.id);
+                if (TraceTime.InPresent(t)) all.Add(t);
+            }
             foreach (var t in remote.Values)
-                if (!ids.Contains(t.id)) all.Add(t);
+                if (!ids.Contains(t.id) && TraceTime.InPresent(t)) all.Add(t);
             return all;
         }
 
         bool IsKnown(SavedTrace t) =>
-            saved.Contains(t) || (remote.TryGetValue(t.id, out var r) && r == t);
+            saved.Contains(t) || (remote.TryGetValue(t.id, out var r) && r == t) ||
+            (capsules.TryGetValue(t.id, out var c) && c == t);
+
+        /// <summary>
+        /// Ce se vede acum, după modul de pe cursor: în Prezent urmele (și capsulele pe care le-am deschis, care au
+        /// devenit urme), în Viitor doar capsulele încă nedeschise (plus cele deschise chiar acum, cât ies urmele).
+        /// </summary>
+        List<SavedTrace> Shown()
+        {
+            bool future = mainView.Mode == TimeMode.Future;
+            var list = future ? new List<SavedTrace>() : AllTraces();
+            foreach (var c in capsules.Values)
+                if (future ? (c.@sealed || justOpened.Contains(c.id)) : !c.@sealed) list.Add(c);
+            return list;
+        }
+
+        /// <summary>În simulare (Editor), o capsulă deschisă se desenează prin urmele ei.</summary>
+        List<SavedTrace> ShownForSim()
+        {
+            var list = new List<SavedTrace>();
+            foreach (var t in Shown())
+            {
+                if (t.IsCapsule && !t.@sealed) list.AddRange(t.items);
+                else list.Add(t);
+            }
+            return list;
+        }
+
+        /// <summary>S-a schimbat modul: scoatem ce nu mai trebuie văzut și aducem ce lipsește.</summary>
+        void OnModeChanged(TimeMode mode)
+        {
+            justOpened.Clear();
+            if (mode == TimeMode.Future) nextFetch = 0f; // capsulele din jur, cât mai repede
+            if (!tracker.Running) return;
+            var keep = new HashSet<string>();
+            foreach (var t in Shown()) keep.Add(t.id);
+            var current = new List<string>(live.Keys);
+            current.AddRange(pending.Keys);
+            foreach (var id in current)
+                if (!keep.Contains(id)) RemoveLive(id);
+            if (tracker.Simulated)
+            {
+                if (simShown) mainView.ShowSimulatedTraces(ShownForSim());
+            }
+            else if (active)
+            {
+                RefreshPerimeter();
+            }
+        }
 
         /// <summary>Cere de la server urmele din jur, la fiecare fetchInterval secunde sau după o deplasare.</summary>
         void MaybeFetch()
@@ -497,6 +600,14 @@ namespace ThreeTimes.AR
                 serverWarned = false;
                 ApplyRemote(list);
             });
+            yield return CapsuleApi.Nearby(lat, lng, perimeterMeters, fetchLimit, (list, error) =>
+            {
+                if (list != null) ApplyCapsules(list, "CAPSULE");
+            });
+            yield return CapsuleApi.YearNearby(lat, lng, perimeterMeters, (list, error) =>
+            {
+                if (list != null) ApplyCapsules(list, "YEAR_CAPSULE");
+            });
             fetchedOnce = true;
             fetching = false;
         }
@@ -530,7 +641,82 @@ namespace ThreeTimes.AR
             }
             remote.Clear();
             foreach (var pair in fresh) remote[pair.Key] = pair.Value;
-            if (tracker.Simulated && simShown) mainView.ShowSimulatedTraces(AllTraces());
+            if (tracker.Simulated && simShown) mainView.ShowSimulatedTraces(ShownForSim());
+        }
+
+        /// <summary>Capsulele de un fel (CAPSULE sau YEAR_CAPSULE) primite de la server; celelalte rămân.</summary>
+        void ApplyCapsules(List<SavedTrace> list, string kind)
+        {
+            var fresh = new Dictionary<string, SavedTrace>();
+            foreach (var c in list)
+            {
+                if (capsules.TryGetValue(c.id, out var known))
+                {
+                    if (known.IsYearCapsule && known.opened)
+                    {
+                        // Capsula anului deschisă pe telefonul acesta: serverul nu ține minte, păstrăm ce s-a deschis.
+                        known.itemCount = c.itemCount;
+                        known.myItems = c.myItems;
+                    }
+                    else
+                    {
+                        // Deschisă între timp din contul meu, de pe alt telefon: urmele ies și aici.
+                        bool reveal = known.@sealed && !c.@sealed;
+                        CopyCapsule(known, c);
+                        if (reveal) RemoveLive(known.id);
+                    }
+                    fresh[c.id] = known;
+                }
+                else
+                {
+                    fresh[c.id] = c;
+                }
+            }
+            foreach (var pair in new List<KeyValuePair<string, SavedTrace>>(capsules))
+                if (pair.Value.kind == kind) capsules.Remove(pair.Key);
+            foreach (var pair in fresh) capsules[pair.Key] = pair.Value;
+            if (tracker.Simulated && simShown) mainView.ShowSimulatedTraces(ShownForSim());
+        }
+
+        /// <summary>Copiază starea unei capsule venite de la server peste obiectul deja cunoscut.</summary>
+        static void CopyCapsule(SavedTrace target, SavedTrace source)
+        {
+            target.createdAt = source.createdAt;
+            target.mine = source.mine;
+            target.visibility = source.visibility;
+            target.unlockAt = source.unlockAt;
+            target.ready = source.ready;
+            target.opened = source.opened;
+            target.@sealed = source.@sealed;
+            target.collecting = source.collecting;
+            target.itemCount = source.itemCount;
+            target.myItems = source.myItems;
+            target.maxItems = source.maxItems;
+            target.items = source.items ?? new List<SavedTrace>();
+            target.city = source.city;
+            target.year = source.year;
+            target.yearEmotions = source.yearEmotions ?? new List<YearEmotion>();
+        }
+
+        /// <summary>Capsula primită de la server: actualizează obiectul cunoscut sau o adaugă (și o arată).</summary>
+        SavedTrace StoreCapsule(SavedTrace server)
+        {
+            if (capsules.TryGetValue(server.id, out var known))
+            {
+                CopyCapsule(known, server);
+                if (tracker.Simulated && simShown) mainView.ShowSimulatedTraces(ShownForSim());
+                return known;
+            }
+            capsules[server.id] = server;
+            if (tracker.Simulated)
+            {
+                if (simShown) mainView.ShowSimulatedTraces(ShownForSim());
+            }
+            else if (tracker.Running && mainView.Mode == TimeMode.Future)
+            {
+                StartCoroutine(SpawnRoutine(server, true, null));
+            }
+            return server;
         }
 
         IEnumerator RestoreAfterFirstFetch()
@@ -619,7 +805,7 @@ namespace ThreeTimes.AR
             }
             TraceStore.Save(saved);
             mainView.SetTraceCount(saved.Count);
-            if (tracker.Simulated) mainView.ShowSimulatedTraces(AllTraces());
+            if (tracker.Simulated) mainView.ShowSimulatedTraces(ShownForSim());
         }
 
         IEnumerator DeletePending()
@@ -639,9 +825,13 @@ namespace ThreeTimes.AR
         /// <summary>Urmele care se văd acum (în AR sau, în Editor, peste ilustrație), pentru cartea poștală.</summary>
         List<SavedTrace> VisibleTraces()
         {
-            if (tracker.Simulated) return AllTraces();
+            if (tracker.Simulated) return ShownForSim();
             var list = new List<SavedTrace>();
-            foreach (var l in live.Values) list.Add(l.trace);
+            foreach (var l in live.Values)
+            {
+                if (!l.trace.IsCapsule) list.Add(l.trace);
+                else if (!l.trace.@sealed) list.AddRange(l.trace.items);
+            }
             return list;
         }
 
@@ -651,7 +841,7 @@ namespace ThreeTimes.AR
         /// </summary>
         void TracesForMap(double lat, double lng, float radius, Action<List<SavedTrace>> done)
         {
-            var mineNear = saved.FindAll(t => DistanceMeters(lat, lng, t.latitude, t.longitude) <= radius);
+            var mineNear = saved.FindAll(t => TraceTime.InPresent(t) && DistanceMeters(lat, lng, t.latitude, t.longitude) <= radius);
             if (!ServerSettings.IsConfigured)
             {
                 done(mineNear);
@@ -722,9 +912,15 @@ namespace ThreeTimes.AR
                 RemoveLive(t.id);
                 count++;
             }
+            foreach (var c in new List<SavedTrace>(capsules.Values))
+            {
+                if (!c.mine) continue;
+                capsules.Remove(c.id);
+                RemoveLive(c.id);
+            }
             TraceStore.PendingDeletes.Clear();
             TraceStore.Save(saved);
-            if (tracker.Simulated) mainView.ShowSimulatedTraces(AllTraces());
+            if (tracker.Simulated) mainView.ShowSimulatedTraces(ShownForSim());
             TestLog.Add($"Cont șters: {count} urme scoase de pe telefon");
         }
 
@@ -760,6 +956,30 @@ namespace ThreeTimes.AR
                 return;
             }
 
+            var trace = FromDraft(draft);
+
+            if (tracker.Simulated)
+            {
+                Commit(trace);
+                return;
+            }
+
+            placing = true;
+            StartCoroutine(SpawnRoutine(trace, true, ok =>
+            {
+                placing = false;
+                if (ok) Commit(trace);
+                else
+                {
+                    MediaStore.Delete(trace.mediaFile);
+                    router.Toast("Urma nu a putut fi așezată. Mai încearcă peste câteva secunde.");
+                }
+            }));
+        }
+
+        /// <summary>Urma (sau capsula) completată în foaie, la `distanceAhead` metri în fața telefonului.</summary>
+        SavedTrace FromDraft(TraceDraft draft)
+        {
             var fix = tracker.Fix.Value;
             var look = draft.Look ?? TraceStyle.Legacy("bucurie");
             var trace = new SavedTrace
@@ -784,14 +1004,10 @@ namespace ThreeTimes.AR
                 heightAboveTerrain = heightAboveTerrain,
                 accuracyMeters = (float)fix.HorizontalAccuracy,
                 yawAccuracyDegrees = (float)fix.YawAccuracy,
-                createdAt = DateTime.UtcNow.ToString("o")
+                createdAt = DateTime.UtcNow.ToString("o"),
+                yearCapsule = draft.YearCapsule
             };
-
-            if (tracker.Simulated)
-            {
-                Commit(trace);
-                return;
-            }
+            if (tracker.Simulated) return trace;
 
             // Mutăm punctul la `distanceAhead` metri în direcția în care privește camera.
             // EunRotation: X = est, Y = sus, Z = nord.
@@ -806,17 +1022,287 @@ namespace ThreeTimes.AR
                 trace.longitude += flat.x * distanceAhead /
                                    (metersPerDegree * Math.Cos(trace.latitude * Math.PI / 180.0));
             }
+            return trace;
+        }
 
-            placing = true;
-            StartCoroutine(SpawnRoutine(trace, true, ok =>
+        // ---------------------------------------------------------------- capsulele timpului (Viitor)
+
+        /// <summary>De ce nu se poate închide acum o capsulă, sau null.</summary>
+        string CapsuleBlockReason()
+        {
+            if (!ServerSettings.IsConfigured)
+                return "Capsulele se păstrează pe server: leagă aplicația de server (Meniu → Server) și mai încearcă.";
+            if (creatingCapsule) return "Se trimite capsula de dinainte. Mai încearcă într-o clipă.";
+            return PlaceBlockReason();
+        }
+
+        /// <summary>
+        /// Capsula pleacă direct la server (acolo se verifică data și locul la deschidere). Pe telefon nu păstrăm
+        /// conținutul: nici cine a lăsat-o nu o poate citi înainte de dată.
+        /// </summary>
+        void PlaceCapsule(TraceDraft draft)
+        {
+            string blocked = CapsuleBlockReason();
+            if (blocked != null)
             {
-                placing = false;
-                if (ok) Commit(trace);
+                router.Toast(blocked, 4f);
+                MediaStore.Delete(draft.MediaFile);
+                return;
+            }
+            var item = FromDraft(draft);
+            item.kind = "CAPSULE_ITEM";
+            creatingCapsule = true;
+
+            // O urmă în plus, într-o capsulă care mai primește urme.
+            if (!string.IsNullOrEmpty(draft.CapsuleId))
+            {
+                router.Toast("Se pune urma în capsulă…", 2f);
+                mainView.StartCoroutine(CapsuleApi.AddItem(draft.CapsuleId, item, (server, error, refused) =>
+                {
+                    creatingCapsule = false;
+                    MediaStore.Delete(item.mediaFile);
+                    if (server == null)
+                    {
+                        TestLog.Add($"Urmă nepusă în capsulă: {error}");
+                        router.Toast(refused ? $"Urma nu a fost pusă. {error}" : $"Urma nu s-a putut pune în capsulă. {error}", 6f);
+                        return;
+                    }
+                    var stored = StoreCapsule(server);
+                    TestLog.Add($"Urmă pusă în capsulă ({stored.itemCount} urme)");
+                    router.Toast($"Urma ta e în capsulă ({stored.itemCount} din {(stored.maxItems > 0 ? stored.maxItems : 10)}).", 4f);
+                }));
+                return;
+            }
+
+            // Capsulă nouă, cu prima urmă.
+            var place = new SavedTrace
+            {
+                id = Guid.NewGuid().ToString(),
+                kind = "CAPSULE",
+                latitude = item.latitude,
+                longitude = item.longitude,
+                altitude = item.altitude,
+                heightAboveTerrain = item.heightAboveTerrain,
+                accuracyMeters = item.accuracyMeters,
+                yawAccuracyDegrees = item.yawAccuracyDegrees,
+                visibility = string.IsNullOrEmpty(draft.Visibility) ? "PUBLIC" : draft.Visibility,
+                unlockAt = draft.UnlockAt
+            };
+            router.Toast("Se face capsula…", 2f);
+            mainView.StartCoroutine(CapsuleApi.Create(place, item, (server, error, refused) =>
+            {
+                creatingCapsule = false;
+                MediaStore.Delete(item.mediaFile);
+                if (server == null)
+                {
+                    TestLog.Add($"Capsulă netrimisă: {error}");
+                    router.Toast(refused ? $"Capsula nu a fost păstrată. {error}" : $"Capsula nu s-a putut trimite. {error}", 6f);
+                    return;
+                }
+                var stored = StoreCapsule(server);
+                TestLog.Add($"Capsulă creată ({stored.visibility}, se deschide {stored.unlockAt}) · " +
+                            $"±{place.accuracyMeters:0.0} m · {stored.latitude:F6}, {stored.longitude:F6}");
+                router.Toast(stored.visibility == "PERSONAL"
+                    ? "Capsula ta e aici, cu prima urmă. Atinge sfera ca să mai pui urme, apoi sigileaz-o."
+                    : "Capsula e aici, cu prima ta urmă. Oricine trece pe aici își poate pune urma, până o sigilezi tu.", 6f);
+            }));
+        }
+
+        /// <summary>Atingerea unei capsule sigilate: serverul verifică data și locul și, dacă e bine, trimite conținutul.</summary>
+        void OpenCapsule(SavedTrace capsule)
+        {
+            if (opening) return;
+            if (!ServerSettings.IsConfigured)
+            {
+                router.Toast("Capsulele se deschid prin server: Meniu → Server.", 4f);
+                return;
+            }
+            if (capsule.IsYearCapsule && !CapsuleText.IsReady(capsule))
+            {
+                mainView.ShowYearCard(capsule);
+                return;
+            }
+            if (!CapsuleText.IsReady(capsule))
+            {
+                bool canAdd = capsule.collecting && (capsule.visibility != "PERSONAL" || capsule.mine);
+                mainView.ShowCapsuleCard(capsule,
+                    canAdd ? () => mainView.OpenAddToCapsule(capsule) : (Action)null,
+                    capsule.collecting && capsule.mine ? () => SealCapsule(capsule) : (Action)null,
+                    capsule.mine ? () => DeleteCapsule(capsule) : (Action)null,
+                    capsule.collecting && capsule.myItems > 0 ? () => RemoveMyCapsuleItems(capsule) : (Action)null);
+                return;
+            }
+            if (!tracker.Fix.HasValue)
+            {
+                router.Toast("Așteaptă să se termine localizarea, apoi atinge din nou capsula.", 4f);
+                return;
+            }
+            var f = tracker.Fix.Value;
+            opening = true;
+            router.Toast("Se deschide capsula…", 1.5f);
+            Func<string, double, double, float, Action<SavedTrace, string>, IEnumerator> open =
+                capsule.IsYearCapsule ? CapsuleApi.YearOpen : CapsuleApi.Open;
+            mainView.StartCoroutine(open(capsule.id, f.Latitude, f.Longitude, (float)f.HorizontalAccuracy,
+                (opened, error) =>
+                {
+                    opening = false;
+                    if (opened == null)
+                    {
+                        router.Toast(error, 5f);
+                        return;
+                    }
+                    CopyCapsule(capsule, opened);
+                    justOpened.Add(capsule.id);
+                    TestLog.Add("Capsulă deschisă");
+                    RevealCapsule(capsule);
+                }));
+        }
+
+        /// <summary>Sticla se sparge și urmele ies din ea; o singură urmă se deschide direct.</summary>
+        void RevealCapsule(SavedTrace capsule)
+        {
+            int n = capsule.items?.Count ?? 0;
+            string hint = n == 0 ? "Capsula s-a deschis, dar urmele din ea au fost scoase."
+                        : n == 1 ? null
+                        : $"Capsula s-a deschis: {n} urme. Atinge-le ca să le deschizi.";
+            if (live.TryGetValue(capsule.id, out var l) && l.capsuleVisual != null && l.anchor != null)
+            {
+                if (l.touch != null)
+                {
+                    byCollider.Remove(l.touch);
+                    Destroy(l.touch);
+                }
+                var anchor = l.anchor;
+                l.capsuleVisual.Shatter(() =>
+                {
+                    if (anchor == null || !tracker.Running) return;
+                    emergeNext.Add(capsule.id);
+                    BuildVisual(anchor, capsule);
+                }, l.root != null ? l.root.gameObject : null);
+                StartCoroutine(AfterReveal(capsule, hint, 1.8f));
+                return;
+            }
+            if (tracker.Simulated && simShown) mainView.ShowSimulatedTraces(ShownForSim());
+            StartCoroutine(AfterReveal(capsule, hint, 0.2f));
+        }
+
+        IEnumerator AfterReveal(SavedTrace capsule, string hint, float seconds)
+        {
+            yield return new WaitForSeconds(seconds);
+            if (capsule.IsYearCapsule) mainView.ShowYearCard(capsule);
+            else if (hint != null) router.Toast(hint, 5f);
+            else if (capsule.items != null && capsule.items.Count == 1) mainView.OpenTrace(capsule.items[0]);
+        }
+
+        void SealCapsule(SavedTrace capsule)
+        {
+            mainView.StartCoroutine(CapsuleApi.Seal(capsule.id, (server, error) =>
+            {
+                if (server == null)
+                {
+                    router.Toast($"Capsula nu s-a putut sigila. {error}", 5f);
+                    return;
+                }
+                var stored = StoreCapsule(server);
+                TestLog.Add($"Capsulă sigilată ({stored.itemCount} urme)");
+                router.Toast($"Capsula e sigilată, cu {stored.itemCount} {(stored.itemCount == 1 ? "urmă" : "urme")}. " +
+                             $"Se deschide {CapsuleText.When(stored)}.", 5f);
+            }));
+        }
+
+        void ReportCapsuleItem(SavedTrace item)
+        {
+            if (item.mine)
+            {
+                router.Toast("Asta e urma ta. O poți șterge, dacă vrei.");
+                return;
+            }
+            item.reported = true;
+            mainView.StartCoroutine(CapsuleApi.ReportItem(item.id, null, (ok, error) =>
+            {
+                if (ok)
+                {
+                    TestLog.Add("Urmă din capsulă raportată");
+                    router.Toast("Mulțumim. Urma a fost trimisă la moderare.", 4f);
+                }
                 else
                 {
-                    MediaStore.Delete(trace.mediaFile);
-                    router.Toast("Urma nu a putut fi așezată. Mai încearcă peste câteva secunde.");
+                    item.reported = false;
+                    router.Toast($"Raportarea nu a mers: {error}", 4f);
                 }
+            }));
+        }
+
+        /// <summary>Scoate urmele mele dintr-o capsulă de grup care încă se umple.</summary>
+        void RemoveMyCapsuleItems(SavedTrace capsule)
+        {
+            mainView.StartCoroutine(CapsuleApi.DeleteMyItems(capsule.id, (ok, error) =>
+            {
+                if (!ok)
+                {
+                    router.Toast($"Urmele nu s-au putut scoate. {error}", 5f);
+                    return;
+                }
+                int removed = capsule.myItems;
+                capsule.itemCount = Mathf.Max(0, capsule.itemCount - removed);
+                capsule.myItems = 0;
+                if (capsule.itemCount == 0)
+                {
+                    capsules.Remove(capsule.id);
+                    RemoveLive(capsule.id);
+                }
+                if (tracker.Simulated && simShown) mainView.ShowSimulatedTraces(ShownForSim());
+                TestLog.Add($"Urme scoase din capsulă: {removed}");
+                router.Toast(removed == 1 ? "Urma ta a fost scoasă din capsulă." : $"Cele {removed} urme ale tale au fost scoase din capsulă.");
+            }));
+        }
+
+        void DeleteCapsuleItem(SavedTrace item)
+        {
+            if (!item.mine)
+            {
+                router.Toast("Poți șterge doar urmele puse de tine.");
+                return;
+            }
+            mainView.StartCoroutine(CapsuleApi.DeleteItem(item.id, (ok, error) =>
+            {
+                if (!ok)
+                {
+                    router.Toast($"Urma nu s-a putut șterge: {error}", 4f);
+                    return;
+                }
+                if (item.capsuleId != null && capsules.TryGetValue(item.capsuleId, out var capsule))
+                {
+                    capsule.items.RemoveAll(x => x.id == item.id);
+                    capsule.itemCount = Mathf.Max(0, capsule.itemCount - 1);
+                    capsule.myItems = Mathf.Max(0, capsule.myItems - 1);
+                    RemoveLive(capsule.id); // se reface la următoarea verificare a perimetrului
+                }
+                if (tracker.Simulated && simShown) mainView.ShowSimulatedTraces(ShownForSim());
+                TestLog.Add("Urmă din capsulă ștearsă");
+                router.Toast("Urma a fost ștearsă.");
+            }));
+        }
+
+        void DeleteCapsule(SavedTrace capsule)
+        {
+            if (!capsule.mine)
+            {
+                router.Toast("Poți șterge doar capsulele lăsate de tine.");
+                return;
+            }
+            mainView.StartCoroutine(CapsuleApi.Delete(capsule.id, (ok, error) =>
+            {
+                if (!ok)
+                {
+                    router.Toast($"Capsula nu s-a putut șterge: {error}", 4f);
+                    return;
+                }
+                capsules.Remove(capsule.id);
+                RemoveLive(capsule.id);
+                if (tracker.Simulated && simShown) mainView.ShowSimulatedTraces(ShownForSim());
+                TestLog.Add("Capsulă ștearsă");
+                router.Toast("Capsula a fost ștearsă.");
             }));
         }
 
@@ -827,7 +1313,7 @@ namespace ThreeTimes.AR
             saved.Add(trace);
             TraceStore.Save(saved);
             mainView.SetTraceCount(saved.Count);
-            if (tracker.Simulated) mainView.ShowSimulatedTraces(AllTraces());
+            if (tracker.Simulated) mainView.ShowSimulatedTraces(ShownForSim());
             if (ServerSettings.IsConfigured) mainView.StartCoroutine(Upload(trace));
             string kind = trace.type == "PHOTO" ? "poză, " : trace.type == "VOICE" ? "voce, " : "";
             TestLog.Add($"Urmă lăsată ({kind}{TraceLook.Name(trace.emotion)}, nivel {TraceLook.Level(trace.intensity)}) · " +
@@ -910,12 +1396,33 @@ namespace ThreeTimes.AR
 
             // Zona de atingere stă pe rădăcină, deci crește odată cu urma îndepărtată.
             var touch = root.gameObject.AddComponent<SphereCollider>();
-            if (particleMaterial != null)
+            CapsuleVisual capsuleVisual = null;
+            List<(Collider touch, SavedTrace item)> itemTouches = null;
+            if (particleMaterial != null && t.IsCapsule && t.@sealed)
+            {
+                // Capsula încă închisă: sfera de sticlă cu lumină (a anului, mai mare).
+                float size = t.IsYearCapsule ? 2.2f : 1f;
+                var holder = new GameObject("Sphere").transform;
+                holder.SetParent(appear, false);
+                holder.localScale = Vector3.one * size;
+                capsuleVisual = CapsuleVisual.Build(t, particleMaterial, holder);
+                touch.radius = CapsuleVisual.TouchRadius * size;
+            }
+            else if (particleMaterial != null && t.IsCapsule)
+            {
+                // Capsula deschisă: urmele ei, în cerc; fiecare se atinge separat, capsula însăși nu.
+                itemTouches = CapsuleVisual.BuildOpened(t, particleMaterial, appear, emergeNext.Remove(t.id));
+                Destroy(touch);
+                touch = null;
+            }
+            else if (particleMaterial != null)
             {
                 // Forma din particule: floare, picătură sau semilună, după emoție și intensitate.
                 var style = TraceStyle.Of(t);
                 TraceShapeBuilder.Build(style, t.id, particleMaterial, appear, t.type);
                 touch.radius = TraceShapeBuilder.Diameter(style.Level) * 0.6f;
+                // „Acum un an, aici”: urma revenită la aniversare are câteva scântei aurii în jur.
+                if (TraceTime.AnniversaryYears(t) > 0) CapsuleVisual.AddShards(t.id, particleMaterial, appear);
             }
             else if (markerPrefab != null)
             {
@@ -931,9 +1438,18 @@ namespace ThreeTimes.AR
             }
 
             root.gameObject.SetActive(tracesVisible);
-            var l = new LiveTrace { trace = t, anchor = anchor, root = root, touch = touch };
+            var l = new LiveTrace { trace = t, anchor = anchor, root = root, touch = touch, capsuleVisual = capsuleVisual };
             live[t.id] = l;
-            byCollider[touch] = l;
+            if (touch != null) byCollider[touch] = l;
+            if (itemTouches != null)
+            {
+                l.extraTouches = new List<Collider>();
+                foreach (var (itemTouch, item) in itemTouches)
+                {
+                    l.extraTouches.Add(itemTouch);
+                    byCollider[itemTouch] = new LiveTrace { trace = item, anchor = anchor, root = root, touch = itemTouch };
+                }
+            }
             StartCoroutine(FadeIn(appear));
         }
 
@@ -962,6 +1478,9 @@ namespace ThreeTimes.AR
             if (live.TryGetValue(id, out var l))
             {
                 if (l.touch != null) byCollider.Remove(l.touch);
+                if (l.extraTouches != null)
+                    foreach (var c in l.extraTouches)
+                        if (c != null) byCollider.Remove(c);
                 if (l.anchor != null) Destroy(l.anchor);
                 live.Remove(id);
             }
@@ -1014,8 +1533,8 @@ namespace ThreeTimes.AR
             cam.depth = 10;
             // Încadrăm toată grila (aprox. 3,8 m lățime, 5,4 m înălțime), și pe ecran de telefon, vertical.
             float tanHalf = Mathf.Tan(cam.fieldOfView * 0.5f * Mathf.Deg2Rad);
-            float distance = Mathf.Max(2.75f / tanHalf, 1.95f / (tanHalf * Mathf.Max(0.1f, cam.aspect)));
-            cam.transform.position = new Vector3(0f, 0f, 4.6f - distance);
+            float distance = Mathf.Max(3.3f / tanHalf, 1.95f / (tanHalf * Mathf.Max(0.1f, cam.aspect)));
+            cam.transform.position = new Vector3(0f, -0.55f, 4.6f - distance);
 
             // Cele 12 forme de bază (nivel „mediu”), câte 4 pe rând, fiecare în altă culoare.
             for (int i = 0; i < TraceStyle.Shapes.Length; i++)
@@ -1039,6 +1558,22 @@ namespace ThreeTimes.AR
                 holder.transform.position = new Vector3((i - 1) * 1.4f, -1.75f, 4.6f);
                 TraceShapeBuilder.Build(keys[i], 1, $"preview-type-{i}", particleMaterial, holder.transform, types[i]);
             }
+
+            // Rândul capsulelor: închisă (lumină slabă) și gata de deschis (lumină puternică, inel).
+            for (int i = 0; i < 2; i++)
+            {
+                var capsule = new SavedTrace
+                {
+                    id = "preview-capsule-" + i,
+                    kind = "CAPSULE",
+                    @sealed = true,
+                    ready = i == 1,
+                    unlockAt = DateTime.UtcNow.AddDays(i == 1 ? -1 : 30).ToString("o")
+                };
+                var holder = new GameObject($"Preview capsule {i}");
+                holder.transform.position = new Vector3((i - 0.5f) * 1.6f, -2.9f, 4.6f);
+                CapsuleVisual.Build(capsule, particleMaterial, holder.transform);
+            }
         }
 
         // ---------------------------------------------------------------- ștergere
@@ -1058,7 +1593,7 @@ namespace ThreeTimes.AR
             if (ServerSettings.IsConfigured) mainView.StartCoroutine(DeletePending());
             DestroyAll();
             mainView.SetTraceCount(0);
-            if (tracker.Simulated) mainView.ShowSimulatedTraces(AllTraces());
+            if (tracker.Simulated) mainView.ShowSimulatedTraces(ShownForSim());
             Debug.Log($"[3Times] Urme șterse: {count}");
             if (count > 0) TestLog.Add($"Toate urmele de test șterse ({count})");
             router.Toast(count == 0 ? "Nu ai urme de test." : $"Am șters {count} urme de test.");

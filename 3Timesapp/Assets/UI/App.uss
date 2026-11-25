@@ -1259,3 +1259,124 @@
     -unity-text-align: middle-center;
     white-space: normal;
 }
+
+/* ---------- Capsula timpului: data și cine o poate deschide ---------- */
+
+.capsule-panel { margin-bottom: 8px; }
+.capsule-presets { margin-top: 0; background-color: var(--future-tint); }
+.capsule-visibility { background-color: var(--future-tint); }
+.capsule-presets .seg--active,
+.capsule-visibility .seg--active { color: var(--future); }
+.capsule-date { margin-top: 10px; justify-content: space-between; }
+.capsule-step {
+    flex-grow: 1;
+    flex-basis: 0;
+    height: 40px;
+    margin: 0 3px;
+    border-width: 1px;
+    border-color: var(--line);
+    border-radius: 20px;
+    justify-content: space-between;
+}
+.capsule-step--wide { flex-grow: 1.6; }
+.capsule-arrow,
+.capsule-arrow:hover,
+.capsule-arrow:active {
+    width: 30px;
+    height: 38px;
+    margin: 0;
+    padding: 0;
+    border-width: 0;
+    background-color: rgba(0, 0, 0, 0);
+    color: var(--future);
+    font-size: 20px;
+    -unity-text-align: middle-center;
+}
+.capsule-value {
+    flex-grow: 1;
+    margin: 0;
+    padding: 0;
+    color: var(--ink);
+    font-size: 15px;
+    -unity-font: url("Fonts/Figtree-SemiBold.ttf");
+    -unity-font-definition: initial;
+    -unity-text-align: middle-center;
+}
+.sim-capsule__orb { -unity-background-scale-mode: scale-to-fit; }
+
+/* Foaia „Lasă o urmă / Creează o capsulă”: conținutul se derulează, nimic nu se strivește. */
+.trace-scroll { flex-grow: 1; flex-shrink: 1; margin: 0 -20px; }
+.trace-scroll > #unity-content-viewport > #unity-content-container { padding: 0 20px 12px 20px; }
+.trace-scroll > #unity-content-viewport > #unity-content-container > * { flex-shrink: 0; }
+.trace-scroll .trace-preview { flex-grow: 0; height: 120px; }
+.trace-submit { flex-shrink: 0; margin-top: 8px; }
+
+/* Ecranul unei capsule */
+.capsule-card-title { color: var(--future); }
+.capsule-card-btn { margin-top: 12px; }
+
+/* Bifa „Pune-o și în capsula anului”: un rând întreg care se apasă */
+.year-row,
+.year-row:hover,
+.year-row:active {
+    flex-direction: row;
+    align-items: center;
+    margin: 12px 0 0 0;
+    padding: 12px 14px;
+    border-width: 0;
+    border-radius: 16px;
+    background-color: var(--future-tint);
+}
+.year-check {
+    width: 24px;
+    height: 24px;
+    flex-shrink: 0;
+    margin-right: 12px;
+    border-width: 2px;
+    border-radius: 12px;
+    border-color: var(--future-icon);
+    background-color: var(--surface);
+}
+.year-check--on { background-color: var(--future-icon); }
+.year-tick {
+    display: none;
+    position: absolute;
+    left: 6px;
+    top: 2px;
+    width: 7px;
+    height: 12px;
+    border-right-width: 3px;
+    border-bottom-width: 3px;
+    border-color: #FFFFFF;
+    rotate: 45deg;
+}
+.year-check--on .year-tick { display: flex; }
+.year-label {
+    flex-grow: 1;
+    flex-shrink: 1;
+    margin: 0;
+    padding: 0;
+    white-space: normal;
+    font-size: 13px;
+    color: var(--ink);
+    -unity-text-align: middle-left;
+}
+
+/* Ceasul de test, în Jurnal de test */
+.log-clock {
+    margin: 4px 0 12px 0;
+    padding: 14px 16px;
+    border-radius: 20px;
+    background-color: var(--future-tint);
+}
+.log-clock-title {
+    -unity-font: url("Fonts/Figtree-SemiBold.ttf");
+    -unity-font-definition: initial;
+    font-size: 14px;
+    color: var(--future);
+    margin: 0;
+    padding: 0;
+}
+.log-clock-text { margin: 4px 0 0 0; padding: 0; white-space: normal; }
+.log-clock-btn { margin: 12px 0 0 0; }
+.sim-trace__label--anniversary { background-color: #FFF1C9; color: #8A5A00; }
