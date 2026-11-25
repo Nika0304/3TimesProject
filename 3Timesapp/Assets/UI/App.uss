@@ -1259,3 +1259,122 @@
     -unity-text-align: middle-center;
     white-space: normal;
 }
+
+
+/* ---------- Trecut: carte poștală și interfața de epocă ---------- */
+/* Cât ești în Trecut (camera pornită, Opera ancorată), ecranul principal primește clasa .past-era: gradienții
+   albi devin sepia întunecat, textele au culoarea hârtiei, butoanele par din carton. Notițele vin ca o carte
+   poștală din Temesvárul de atunci, cu salutul de pe cărțile poștale ale vremii și o ștampilă cu anul. */
+
+.past-note {
+    position: absolute;
+    left: 20px;
+    right: 20px;
+    bottom: 176px;
+    padding: 14px 18px 18px 18px;
+    background-color: #EDE2C9;
+    background-image: url("Images/past-paper.png");
+    -unity-background-scale-mode: scale-and-crop;
+    border-width: 1px;
+    border-color: #9C7B52;
+    border-radius: 2px;
+    rotate: -1.2deg;
+    transition-property: opacity, translate;
+    transition-duration: 0.45s, 0.45s;
+    transition-timing-function: ease-out-cubic, ease-out-cubic;
+}
+.past-note--out { opacity: 0; translate: 0 26px; }
+.past-note__head { flex-direction: row; justify-content: space-between; align-items: flex-start; }
+.past-note__greeting {
+    -unity-font: url("Fonts/Fraunces-Italic.ttf");
+    -unity-font-definition: initial;
+    font-size: 15px;
+    color: #7A5A38;
+    margin: 4px 0 0 0;
+    padding: 0;
+}
+.past-note__stamp {
+    width: 60px;
+    height: 60px;
+    margin: -6px -6px 0 8px;
+    border-width: 2px;
+    border-radius: 30px;
+    border-color: rgba(128, 44, 30, 0.72);
+    align-items: center;
+    justify-content: center;
+    rotate: 10deg;
+}
+.past-note__stamp-town {
+    font-size: 8px;
+    letter-spacing: 1px;
+    color: rgba(128, 44, 30, 0.85);
+    margin: 0;
+    padding: 0;
+}
+.past-note__stamp-year {
+    -unity-font: url("Fonts/Fraunces-Medium.ttf");
+    -unity-font-definition: initial;
+    font-size: 18px;
+    color: rgba(128, 44, 30, 0.9);
+    margin: -2px 0 0 0;
+    padding: 0;
+}
+.past-note__title {
+    -unity-font: url("Fonts/Fraunces-Medium.ttf");
+    -unity-font-definition: initial;
+    font-size: 22px;
+    color: #3B2A1A;
+    white-space: normal;
+    margin: 2px 0 8px 0;
+    padding: 0;
+}
+.past-note__rule {
+    height: 4px;
+    margin-bottom: 9px;
+    border-top-width: 1px;
+    border-bottom-width: 1px;
+    border-color: rgba(59, 42, 26, 0.4);
+}
+.past-note__text {
+    -unity-font: url("Fonts/Fraunces-Medium.ttf");
+    -unity-font-definition: initial;
+    font-size: 14px;
+    color: #3B2A1A;
+    white-space: normal;
+    margin: 0;
+    padding: 0;
+}
+
+.past-era .fade-top { -unity-background-image-tint-color: rgba(36, 24, 12, 0.22); }
+.past-era .fade-bottom { -unity-background-image-tint-color: rgba(36, 24, 12, 0.3); }
+.past-era .past-tint { display: none; }
+.past-era .mode-word {
+    color: #F3E7CC;
+    text-shadow: 0 1px 6px rgba(0, 0, 0, 0.7);
+}
+.past-era .mode-label,
+.past-era .mode-label--past {
+    color: #F0DDB4;
+    text-shadow: 0 1px 4px rgba(0, 0, 0, 0.7);
+}
+.past-era .caption,
+.past-era .hint {
+    color: #F3E7CC;
+    text-shadow: 0 1px 4px rgba(0, 0, 0, 0.75);
+}
+.past-era .logo__three,
+.past-era .logo__times {
+    color: #F3E7CC;
+    text-shadow: 0 1px 4px rgba(0, 0, 0, 0.7);
+}
+.past-era .round-btn,
+.past-era .round-btn:hover {
+    background-color: rgba(237, 226, 201, 0.94);
+    border-color: #9C7B52;
+}
+.past-era .btn--primary,
+.past-era .btn--primary:hover {
+    background-color: #6E4B2A;
+    color: #F3E7CC;
+}
+.past-era .btn--primary:active { background-color: #5A3C20; }

@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.InputSystem;
@@ -44,6 +45,8 @@ namespace ThreeTimes.UI
         public event Action<ThreeTimes.Data.SavedTrace> TraceDeleteRequested;
         /// <summary>Contul a fost șters împreună cu urmele lui (TraceManager le scoate și de pe telefon).</summary>
         public event Action AccountDeleted;
+        /// <summary>Ai atins anul de sus, în Trecut, cu camera pornită (înapoi la 1900).</summary>
+        public event Action YearTapped;
 
         public bool CameraOn { get; private set; }
 
@@ -79,6 +82,9 @@ namespace ThreeTimes.UI
         VisualElement screenLog;
         Label logText;
         VisualElement screenMain, screenMenu, screenAbout, pastTint, cameraPrompt, simTraces;
+        VisualElement pastNote;
+        Label pastNoteTitle, pastNoteText, pastNoteYear;
+        IVisualElementScheduledItem pastNoteHide;
         Button cameraOff;
         VisualElement statusDot;
         Label statusLabel, modeLabel, modeWord, modeHint;
@@ -106,7 +112,7 @@ namespace ThreeTimes.UI
                     return new ModeLook
                     {
                         Label = "Trecut", Word = "1900",
-                        Hint = "Opera, cum arăta înainte de incendiul din 1920. Privește spre ea din piață.",
+                        Hint = "Privește Opera, apoi palatele și Catedrala: anul se schimbă după ce privești. Atinge anul ca să revii la 1900.",
                         Primary = "Ascultă ghidul",
                         LabelClass = "mode-label--past", KnobClass = "knob--past"
                     };
@@ -140,6 +146,10 @@ namespace ThreeTimes.UI
             screenMenu = root.Q("screen-menu");
             screenAbout = root.Q("screen-about");
             pastTint = root.Q("past-tint");
+            pastNote = root.Q("past-note");
+            pastNoteTitle = root.Q<Label>("past-note-title");
+            pastNoteText = root.Q<Label>("past-note-text");
+            pastNoteYear = root.Q<Label>("past-note-year");
             cameraPrompt = root.Q("camera-prompt");
             simTraces = root.Q("sim-traces");
             cameraOff = root.Q<Button>("camera-off");
@@ -150,6 +160,11 @@ namespace ThreeTimes.UI
             statusLabel = root.Q<Label>("status-label");
             modeLabel = root.Q<Label>("mode-label");
             modeWord = root.Q<Label>("mode-word");
+            modeWord.pickingMode = PickingMode.Position;
+            modeWord.RegisterCallback<ClickEvent>(_ =>
+            {
+                if (Mode == TimeMode.Past && CameraOn) YearTapped?.Invoke();
+            });
             modeHint = root.Q<Label>("mode-hint");
             actionPrimary = root.Q<Button>("action-primary");
 
@@ -316,6 +331,11 @@ namespace ThreeTimes.UI
             UIRouter.SetVisible(cameraPrompt, !on);
             UIRouter.SetVisible(cameraOff, on);
             UIRouter.SetVisible(modeHint, on);
+            if (initialized && Mode == TimeMode.Past)
+            {
+                StopRoll();
+                modeWord.text = WordFor(Mode);
+            }
             actionPrimary.EnableInClassList("btn--muted", !on);
             UpdateSimTracesVisibility();
             UpdateStatus();
@@ -391,6 +411,90 @@ namespace ThreeTimes.UI
 
         void UpdateSimTracesVisibility() =>
             UIRouter.SetVisible(simTraces, CameraOn && Mode == TimeMode.Present && simTraces.childCount > 0);
+
+        // ---------------------------------------------------------------- Trecutul: tema și cartea poștală
+
+        bool pastEra;
+
+        /// <summary>Tema de epocă a ecranului principal (gradienți sepia, texte de culoarea hârtiei, butoane de carton).</summary>
+        public void SetPastEra(bool on)
+        {
+            if (!initialized || on == pastEra) return;
+            pastEra = on;
+            screenMain.EnableInClassList("past-era", on);
+            if (!on) HidePostcard(true);
+        }
+
+        /// <summary>O notiță despre o clădire, ca o carte poștală din Temesvár, cu ștampila anului.</summary>
+        public void ShowPostcard(string title, int year, string text, float seconds)
+        {
+            if (!initialized || pastNote == null) return;
+            pastNoteTitle.text = title;
+            pastNoteText.text = text;
+            pastNoteYear.text = year.ToString();
+            pastNoteHide?.Pause();
+            UIRouter.SetVisible(pastNote, true);
+            // Intră de jos, după ce a apărut în pagină (altfel tranziția nu pornește).
+            pastNote.schedule.Execute(() => pastNote.RemoveFromClassList("past-note--out")).StartingIn(30);
+            pastNoteHide = pastNote.schedule.Execute(() => HidePostcard(false)).StartingIn((long)(seconds * 1000));
+        }
+
+        void HidePostcard(bool now)
+        {
+            if (pastNote == null) return;
+            pastNoteHide?.Pause();
+            pastNote.AddToClassList("past-note--out");
+            if (now) UIRouter.SetVisible(pastNote, false);
+            else pastNoteHide = pastNote.schedule.Execute(() => UIRouter.SetVisible(pastNote, false)).StartingIn(500);
+        }
+
+        // ---------------------------------------------------------------- anul care se derulează
+
+        Coroutine rollRoutine;
+
+        /// <summary>
+        /// Cuvântul mare pentru modul dat. În Trecut e mereu 1900; când apare fațada, trecerea în timp (RollYear)
+        /// pornește din anul de azi, sub blițul proiectorului, și se derulează înapoi la 1900.
+        /// </summary>
+        string WordFor(TimeMode m) => Look(m).Word;
+
+        /// <summary>Derulează anul de sus de la <paramref name="from"/> la <paramref name="to"/>, ca un contor vechi.</summary>
+        public void RollYear(int from, int to, float seconds)
+        {
+            if (!initialized) return;
+            if (rollRoutine != null) StopCoroutine(rollRoutine);
+            modeWord.RemoveFromClassList("word-out");
+            modeLabel.RemoveFromClassList("word-out");
+            rollRoutine = StartCoroutine(Roll(from, to, Mathf.Max(0.1f, seconds)));
+        }
+
+        IEnumerator Roll(int from, int to, float seconds)
+        {
+            float start = Time.realtimeSinceStartup;
+            int last = int.MinValue;
+            while (true)
+            {
+                float u = Mathf.Clamp01((Time.realtimeSinceStartup - start) / seconds);
+                // Pornește repede și încetinește spre final, ca o rolă care se oprește.
+                float eased = 1f - Mathf.Pow(1f - u, 3f);
+                int year = Mathf.RoundToInt(Mathf.Lerp(from, to, eased));
+                if (year != last)
+                {
+                    modeWord.text = year.ToString();
+                    last = year;
+                }
+                if (u >= 1f) break;
+                yield return null;
+            }
+            rollRoutine = null;
+        }
+
+        void StopRoll()
+        {
+            if (rollRoutine == null) return;
+            StopCoroutine(rollRoutine);
+            rollRoutine = null;
+        }
 
         string PresentHint() =>
             traceCount == 0 ? "Nicio urmă aici încă. Lasă tu prima." :
@@ -532,7 +636,9 @@ namespace ThreeTimes.UI
             knob.EnableInClassList("knob--future", m == TimeMode.Future);
 
             // Cuvântul mare („acum”, „1989”, „2030”) iese, se schimbă și intră din nou.
-            if (modeWord.text != look.Word)
+            StopRoll();
+            string word = WordFor(m);
+            if (modeWord.text != word)
             {
                 modeWord.AddToClassList("word-out");
                 modeLabel.AddToClassList("word-out");
@@ -541,7 +647,8 @@ namespace ThreeTimes.UI
                     modeLabel.text = look.Label;
                     modeLabel.EnableInClassList("mode-label--past", m == TimeMode.Past);
                     modeLabel.EnableInClassList("mode-label--future", m == TimeMode.Future);
-                    modeWord.text = look.Word;
+                    // Dacă între timp a pornit trecerea în timp, rola are prioritate.
+                    if (rollRoutine == null) modeWord.text = word;
                     modeWord.RemoveFromClassList("word-out");
                     modeLabel.RemoveFromClassList("word-out");
                 }).StartingIn(180);

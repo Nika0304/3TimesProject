@@ -42,10 +42,32 @@ namespace ThreeTimes.Past
         [Tooltip("Fațada apare doar dacă ești la cel mult atâția metri de ea")]
         [SerializeField] float visibleRadius = 400f;
         [Tooltip("Cât durează apariția (s): fațada crește din pământ")]
-        [SerializeField] float riseSeconds = 1.6f;
+        [SerializeField] float riseSeconds = 3.0f;
+        [Tooltip("Cât așteaptă fațada din 1900 înainte să se developeze (s): întâi blițul și dizolvarea Operei de azi")]
+        [SerializeField] float riseDelay = 1.5f;
 
         GameObject anchor;
         GameObject facade;
+
+        /// <summary>Fațada din 1900 se vede acum (pentru „cerul pictat” și praful ei).</summary>
+        public bool FacadeVisible => facade != null && facade.activeSelf;
+        /// <summary>
+        /// Suntem în Trecut, cu fațada ancorată (filtrul de epocă, filmul vechi, palatele). Rămâne adevărat și când
+        /// fațada din 1900 e ascunsă pentru un an de după 1920 (OperaHidden).
+        /// </summary>
+        public bool Active { get; private set; }
+        /// <summary>Ascunde fațada din 1900 (după incendiul din 1920 Opera arăta ca azi). O pune PastEra.</summary>
+        public bool OperaHidden { get; set; }
+        /// <summary>Fațada (sau null): originea ei e mijlocul fațadei, în planul aripilor, la sol.</summary>
+        public Transform Facade => facade != null ? facade.transform : null;
+        /// <summary>De cât timp se vede fațada (s), sau −1.</summary>
+        public float VisibleFor => FacadeVisible ? Time.realtimeSinceStartup - shownAt : -1f;
+        /// <summary>Cât s-a developat fațada, 0..1 (pentru praful auriu și cerul pictat).</summary>
+        public float RiseProgress { get; private set; }
+        /// <summary>Ancora fațadei (fără scara de creștere), sau null.</summary>
+        public Transform Anchor => anchor != null ? anchor.transform : null;
+        /// <summary>Scara fațadei față de model.</summary>
+        public float Scale => scale;
         bool resolving;
         bool farHintShown, waitHintShown;
         float shownAt = -1f;
@@ -54,6 +76,7 @@ namespace ThreeTimes.Past
         void Update()
         {
             if (tracker == null || mainView == null) return;
+            Active = false;
 
             // Camera oprită: renunțăm la ancoră (la repornire se face alta).
             if (!tracker.Running)
@@ -100,7 +123,8 @@ namespace ThreeTimes.Past
                 if (!resolving) StartCoroutine(Resolve(fix));
                 return;
             }
-            Show(true);
+            Active = true;
+            Show(!OperaHidden);
         }
 
         IEnumerator Resolve(GeoFix fix)
@@ -146,7 +170,7 @@ namespace ThreeTimes.Past
             facade.name = "Fatada Opera 1900";
             facade.transform.localPosition = Vector3.zero;
             facade.transform.localRotation = Quaternion.identity;
-            facade.transform.localScale = new Vector3(scale, 0.001f, scale);
+            facade.transform.localScale = Vector3.one * scale;
             facade.SetActive(false);
             float distance = Distance(fix.Latitude, fix.Longitude, latitude, longitude);
             TestLog.Add($"Fațada 1900 ancorată {how}, la {distance:0} m · ±{fix.HorizontalAccuracy:0.0} m · ±{fix.YawAccuracy:0}°");
@@ -164,13 +188,18 @@ namespace ThreeTimes.Past
             else if (!on && facade.activeSelf)
             {
                 facade.SetActive(false);
+                RiseProgress = 0f;
             }
             if (on)
             {
-                // Fațada „crește” din pământ, cu încetinire la final.
-                float t = Mathf.Clamp01((Time.realtimeSinceStartup - shownAt) / Mathf.Max(0.01f, riseSeconds));
-                float eased = 1f - Mathf.Pow(1f - t, 3f);
-                facade.transform.localScale = new Vector3(scale, scale * Mathf.Max(0.001f, eased), scale);
+                // Fațada se „developează” din granulație, de jos în sus, ca o fotografie veche (shader PastLit).
+                float t = Mathf.Clamp01((Time.realtimeSinceStartup - shownAt - riseDelay) / Mathf.Max(0.01f, riseSeconds));
+                float reveal = PastReveal.Ease(t);
+                if (reveal != RiseProgress || t <= 0f)
+                {
+                    RiseProgress = reveal;
+                    PastReveal.Apply(facade, reveal, 30f);
+                }
             }
         }
 

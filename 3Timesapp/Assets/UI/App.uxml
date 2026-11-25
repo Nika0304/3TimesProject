@@ -248,7 +248,10 @@
                     <ui:Label text="Aplicație de realitate augmentată care arată povestea locurilor: trecut, prezent și viitor. Prima versiune acoperă Piața Victoriei din Timișoara, de la Operă până la Catedrală." class="body section" />
                     <ui:Label text="Surse și licențe" class="title" />
                     <ui:Label text="Sursa și licența fiecărei fotografii și înregistrări istorice vor apărea aici, odată cu conținutul." class="body section" />
-                    <ui:Label text="Harta: © OpenStreetMap contributors (openstreetmap.org/copyright), © CARTO." class="caption section" />
+                    <ui:Label text="Trecutul: clădirile din 1900–1946 sunt reconstituiri aproximative făcute în aplicație, după fotografii de epocă și forma de azi a clădirilor. Pozițiile și formele vin din OpenStreetMap. Firmele de pe prăvălii sunt ilustrative: tipuri de magazine obișnuite atunci." class="body section" />
+                    <ui:Label text="Sunetele din Trecut (proiectorul, piața, clopotele) sunt generate în aplicație, nu sunt înregistrări de epocă." class="body section" />
+                    <ui:Label text="Harta și formele clădirilor: © OpenStreetMap contributors (openstreetmap.org/copyright, ODbL), © CARTO." class="caption section" />
+                    <ui:Label text="Fonturi: Fraunces și Figtree (SIL Open Font License); literele firmelor din Trecut: DejaVu Serif (licență liberă)." class="caption section" />
                     <ui:Label text="Confidențialitate" class="title" />
                     <ui:Label text="Aplicația folosește camera și locația telefonului. Imaginile camerei nu se salvează. Urmele pe care le lași păstrează locul în care le-ai lăsat și pot fi șterse oricând, la cerere." class="body section" />
                     <ui:Label text="Contul e opțional. Dacă îți faci unul, păstrăm doar emailul și parola (criptată, nu poate fi citită). Îl poți șterge oricând din Meniu → Cont, împreună cu toate urmele tale." class="body section" />
@@ -603,6 +606,20 @@
                     <ui:VisualElement class="capture-spacer" />
                 </ui:VisualElement>
             </ui:VisualElement>
+        </ui:VisualElement>
+
+        <!-- Trecut: notița despre o clădire, ca o carte poștală din Temesvárul de atunci -->
+        <ui:VisualElement name="past-note" class="past-note past-note--out hidden" picking-mode="Ignore">
+            <ui:VisualElement class="past-note__head" picking-mode="Ignore">
+                <ui:Label text="Üdvözlet Temesvárról!" class="past-note__greeting" picking-mode="Ignore" />
+                <ui:VisualElement class="past-note__stamp" picking-mode="Ignore">
+                    <ui:Label text="TEMESVÁR" class="past-note__stamp-town" picking-mode="Ignore" />
+                    <ui:Label name="past-note-year" text="1900" class="past-note__stamp-year" picking-mode="Ignore" />
+                </ui:VisualElement>
+            </ui:VisualElement>
+            <ui:Label name="past-note-title" text="" class="past-note__title" picking-mode="Ignore" />
+            <ui:VisualElement class="past-note__rule" picking-mode="Ignore" />
+            <ui:Label name="past-note-text" text="" class="past-note__text" picking-mode="Ignore" />
         </ui:VisualElement>
 
         <!-- Mesaj scurt (toast) -->

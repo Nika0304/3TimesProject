@@ -195,6 +195,12 @@ GameObject:
   - component: {fileID: 588700845}
   - component: {fileID: 588700851}
   - component: {fileID: 588700852}
+  - component: {fileID: 588700854}
+  - component: {fileID: 588700853}
+  - component: {fileID: 588700856}
+  - component: {fileID: 588700855}
+  - component: {fileID: 588700857}
+  - component: {fileID: 588700858}
   m_Layer: 0
   m_Name: App
   m_TagString: Untagged
@@ -377,6 +383,165 @@ MonoBehaviour:
   heightOffset: 0
   visibleRadius: 400
   riseSeconds: 1.6
+  riseDelay: 0.45
+--- !u!114 &588700853
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 588700844}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 630d2389c849f41b3b7f47a70cd48a0e, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ThreeTimes.Past.PastSkyMask
+  past: {fileID: 588700852}
+  look: {fileID: 588700854}
+  streetscape: {fileID: 1086473886}
+  sessionOrigin: {fileID: 1086473884}
+  maskMaterial: {fileID: 2100000, guid: e462040cd5f8f4e3e95ac203fd2d404f, type: 2}
+  pickRadius: 8
+  fallbackAfterSeconds: 6
+  fallbackCenter: {x: 0, y: 26, z: -1}
+  fallbackSize: {x: 23, y: 10, z: 11}
+  dayTop: {r: 0.74, g: 0.81, b: 0.9, a: 1}
+  dayHorizon: {r: 0.9, g: 0.9, b: 0.88, a: 1}
+  nightTop: {r: 0.16, g: 0.18, b: 0.25, a: 1}
+  nightHorizon: {r: 0.36, g: 0.33, b: 0.34, a: 1}
+--- !u!114 &588700854
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 588700844}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 844c7c3e5bc234d2986723453f0a3196, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ThreeTimes.Past.PastLook
+  past: {fileID: 588700852}
+  cameraManager: {fileID: 1104913745}
+  volume: {fileID: 1834220848}
+  sun: {fileID: 2141006167}
+  fadeSeconds: 1.4
+  daylightBrightness: 0.45
+  nightFactor: 0.3
+  exposure: 0.1
+  vignette: 0.22
+  saturation: -70
+  contrast: 6
+  grain: 0.35
+--- !u!114 &588700855
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 588700844}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9a3a9c8a4886f4945a756eb15878eb6b, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ThreeTimes.Past.PastTransition
+  past: {fileID: 588700852}
+  film: {fileID: 588700856}
+  mainView: {fileID: 588700846}
+  dustMaterial: {fileID: 2100000, guid: 2094ea130279a4d5c869dfbfa6ceb379, type: 2}
+  skyMaterial: {fileID: 2100000, guid: e462040cd5f8f4e3e95ac203fd2d404f, type: 2}
+  modernMin: {x: -23, y: -0.5, z: -3}
+  modernMax: {x: 23, y: 34, z: 5.5}
+  dissolveDelay: 0.25
+  dissolveSeconds: 1.3
+  projectorStart: {fileID: 8300000, guid: 30708e344e6b244968e0c6a8d5565994, type: 3}
+  projectorLoop: {fileID: 8300000, guid: 9c273fee58951416fac97e2592ce9503, type: 3}
+  startVolume: 0.8
+  loopVolume: 0.12
+  pastYear: 1900
+  flashSeconds: 0.35
+  flashStrength: 0.75
+  rollSeconds: 2.2
+  facadeSize: {x: 43, y: 26}
+  dustPerSecond: 320
+--- !u!114 &588700856
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 588700844}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f26c52b4138ed48c5b1917cae62a576a, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ThreeTimes.Past.PastFilm
+  look: {fileID: 588700854}
+  arCamera: {fileID: 1104913747}
+  filmMaterial: {fileID: 2100000, guid: 9277257e002364482b35b40c375c966c, type: 2}
+  strength: 1
+--- !u!114 &588700857
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 588700844}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ab50d123eb9f74c4487a8f84f4347c8b, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ThreeTimes.Past.PastEra
+  past: {fileID: 588700852}
+  transition: {fileID: 588700855}
+  mainView: {fileID: 588700846}
+  router: {fileID: 588700848}
+  tracker: {fileID: 588700847}
+  anchorManager: {fileID: 1086473883}
+  arCamera: {fileID: 1104913747}
+  bodyMaterials:
+  - {fileID: 2100000, guid: 04af8b28685fc49468250dc0a7dd96ab, type: 2}
+  - {fileID: 2100000, guid: a01facfb68b05444ba9edc40540fc9c8, type: 2}
+  - {fileID: 2100000, guid: ba62cab827fb94b8b8ff81358f7e9095, type: 2}
+  - {fileID: 2100000, guid: a7547d13e66694f0f9cbf259ba799b93, type: 2}
+  - {fileID: 2100000, guid: f28b74d49d14b4aa493b1c4f526959cf, type: 2}
+  - {fileID: 2100000, guid: 77c6f495ff0324dfb9c5643446d6a2d5, type: 2}
+  - {fileID: 2100000, guid: 6b1b0c8159b54421fa73f2bcc4a805a6, type: 2}
+  awningMaterial: {fileID: 2100000, guid: 9cb3f82444dd3405c9b4e73735a80c30, type: 2}
+  signMaterial: {fileID: 2100000, guid: f0c63c5f27aba4914bb4632583d55291, type: 2}
+  pavingMaterial: {fileID: 2100000, guid: 873e6213d780b488cbc1e547c027bf41, type: 2}
+  glowMaterial: {fileID: 2100000, guid: dbf2dcf6a5fc14e33bebe6546eb80e80, type: 2}
+  tilesMaterial: {fileID: 2100000, guid: 0d48f971c712447e1a377ae17dd7d4f0, type: 2}
+  flagMaterial: {fileID: 2100000, guid: f6855c0579e784bfc83396fb7e376cb2, type: 2}
+  skyMaterial: {fileID: 2100000, guid: e462040cd5f8f4e3e95ac203fd2d404f, type: 2}
+  startYear: 1900
+  dwellSeconds: 1
+  lookAngle: 16
+  maxDistance: 240
+  rollSeconds: 1.3
+  riseSeconds: 1.5
+  noteSeconds: 7
+  cathedralStepSeconds: 4.5
+--- !u!114 &588700858
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 588700844}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3ce1b070215bf492f923e513c8ff59ad, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ThreeTimes.Past.PastAmbience
+  past: {fileID: 588700852}
+  era: {fileID: 588700857}
+  ambience: {fileID: 8300000, guid: 8084300b9553541c6b1b2d12b32938f1, type: 3}
+  bells: {fileID: 8300000, guid: 83533333e5212474cb6ff659bbf981d4, type: 3}
+  ambienceVolume: 0.85
+  bellsVolume: 0.9
+  startDelay: 1.8
+  fadeSeconds: 2.5
 --- !u!1 &1086473881
 GameObject:
   m_ObjectHideFlags: 0
@@ -389,6 +554,7 @@ GameObject:
   - component: {fileID: 1086473884}
   - component: {fileID: 1086473882}
   - component: {fileID: 1086473883}
+  - component: {fileID: 1086473886}
   m_Layer: 0
   m_Name: AR Session Origin
   m_TagString: Untagged
@@ -457,6 +623,19 @@ Transform:
   - {fileID: 1134875913}
   m_Father: {fileID: 1676679593}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1086473886
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1086473881}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c8327b807ca7a4c87b3b7afa5a2cb0b3, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Google.XR.ARCoreExtensions::Google.XR.ARCoreExtensions.ARStreetscapeGeometryManager
+  AnchorPrefab: {fileID: 0}
 --- !u!1 &1104913741
 GameObject:
   m_ObjectHideFlags: 0
@@ -806,6 +985,55 @@ Transform:
   - {fileID: 1413341799}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &1834220847
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1834220849}
+  - component: {fileID: 1834220848}
+  m_Layer: 0
+  m_Name: Past Look Volume
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &1834220848
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1834220847}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 172515602e62fb746b5d573b38a5fe58, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Unity.RenderPipelines.Core.Runtime::UnityEngine.Rendering.Volume
+  m_IsGlobal: 1
+  priority: 10
+  blendDistance: 0
+  weight: 0
+  sharedProfile: {fileID: 11400000, guid: cd58ac1a2f9b44175b5bbff7fa8bf4ba, type: 2}
+--- !u!4 &1834220849
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1834220847}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &2141006166
 GameObject:
   m_ObjectHideFlags: 0
@@ -910,3 +1138,4 @@ SceneRoots:
   - {fileID: 2141006168}
   - {fileID: 1676679593}
   - {fileID: 588700850}
+  - {fileID: 1834220849}
