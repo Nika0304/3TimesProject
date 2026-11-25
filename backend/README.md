@@ -112,6 +112,34 @@ Pozele și vocea nu sunt verificate de AI: pentru ele rămân raportările și a
 - **Șterge**: urma dispare definitiv, cu poza sau vocea ei.
 Pe hotspot serverul e HTTP simplu: parola trece necriptată prin rețeaua locală, deci deschide adminul de pe laptop.
 
+## Conturile (opționale)
+
+Fără cont aplicația merge ca înainte, cu id-ul anonim al telefonului. Cu cont (email + parolă; Google urmează):
+urmele lăsate cu contul deschis intră în cont și sunt „ale mele” de pe orice telefon, iar aplicația arată „Harta mea”.
+La înregistrare / autentificare, urmele lăsate fără cont de pe telefonul acela trec și ele în cont.
+
+| Metodă | Cale | Ce face |
+|---|---|---|
+| POST | `/api/v1/account/register` (`{"firstName", "lastName", "email", "password"}`) | cont nou; 201 `{"token", "account"}` (409 dacă emailul e folosit, 400 la parolă slabă) |
+| POST | `/api/v1/account/login` (`{"email", "password"}`) | `{"token", "account"}`; 401 la parolă greșită, 429 după 10 greșeli în 15 min |
+| GET | `/api/v1/account` | contul: `firstName, lastName, email, createdAt, traceCount, hasPassword, hasGoogle` |
+| GET | `/api/v1/account/traces` | urmele contului (max 500, cele mai noi primele): `{"traces": [...]}` |
+| POST | `/api/v1/account/logout` | închide sesiunea |
+| DELETE | `/api/v1/account` | șterge contul, urmele lui și pe cele lăsate de pe telefonul care cere |
+
+Tokenul primit se trimite la orice cerere ca `Authorization: Bearer <token>` (și la `/api/v1/traces/...`); un token
+expirat sau necunoscut e ignorat la urme și dă 401 la `/api/v1/account`. Parola se păstrează doar ca bcrypt; la
+înregistrare, parola slabă e refuzată (aceleași reguli ca indicatorul din aplicație: `account/PasswordStrength.java`). În bază, tokenul stă doar ca SHA-256; sesiunea ține un an sau până la deconectare.
+
+Încercare:
+
+```
+curl -X POST http://localhost:8080/api/v1/account/register -H "Content-Type: application/json" \
+  -H "X-Device-Id: test-laptop-1234567890" \
+  -d '{"firstName":"Ana","lastName":"Pop","email":"test@exemplu.ro","password":"Ceai-cu-lamaie7"}'
+curl http://localhost:8080/api/v1/account -H "Authorization: Bearer <token-ul primit>"
+```
+
 ## Baza de date
 
 Schema e în `src/main/resources/db/migration` (Flyway; se aplică singură la pornire).

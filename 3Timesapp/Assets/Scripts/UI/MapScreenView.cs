@@ -14,6 +14,7 @@ namespace ThreeTimes.UI
     /// mici (cu polaroid / microfon după tip) și poziția ta. Se trage cu degetul, se mărește din butoane sau
     /// cu dublă atingere. Atingerea unei urme arată o previzualizare: emoția, tipul și cât de departe e.
     /// Conținutul altora se deschide doar de aproape, prin cameră; urmele tale se pot deschide de aici.
+    /// Fila „Harta mea” (doar cu cont) arată doar urmele contului, oriunde ar fi, nu doar pe cele din jur.
     /// </summary>
     public class MapScreenView
     {
@@ -34,12 +35,15 @@ namespace ThreeTimes.UI
         readonly GeospatialTracker tracker;
         readonly Action<double, double, float, Action<List<SavedTrace>>> loadTraces;
         readonly Action<SavedTrace> openTrace;
+        readonly Action<Action<List<SavedTrace>, string>> loadMine;
         readonly MapConfig config;
         readonly PhoneLocation phone = new PhoneLocation();
 
         readonly VisualElement screen, viewport, tileLayer, markerLayer, me, card, cardShapeHolder;
         readonly Label status, cardTitle, cardKind, cardDistance, cardHint;
-        readonly Button cardOpen;
+        readonly Button cardOpen, tabAll, tabMine, cardPrev, cardNext;
+        readonly VisualElement cardNav, groupPanel, groupGrid;
+        readonly Label cardIndexLabel, groupTitle;
 
         double centerLat = DefaultLat, centerLng = DefaultLng;
         int zoom = StartZoom;
@@ -61,12 +65,30 @@ namespace ThreeTimes.UI
         int downloads;
 
         // Urmele
-        readonly List<(SavedTrace trace, VisualElement marker)> markers = new List<(SavedTrace, VisualElement)>();
+        // Urmele apropiate pe ecran (sub ClusterRadius) se strâng într-un singur semn cu numărul lor.
+        class Marker
+        {
+            public SavedTrace Trace;
+            public VisualElement Element;
+            public Label Count;
+            public float X, Y;
+            public bool OnScreen;
+            public List<SavedTrace> Group; // doar la semnul care conduce grupul (null la cele ascunse în grup)
+        }
+        const float ClusterRadius = 26f;
+        readonly List<Marker> markers = new List<Marker>();
         SavedTrace selected;
+        List<SavedTrace> cardGroup;
+        int cardIndex;
         bool fetching;
         bool fetchedOnce;
         double fetchLat, fetchLng;
         float fetchRadius, lastFetchTime = -10f;
+
+        // „Harta mea”: doar urmele contului; zona hărții se lărgește cât să le cuprindă
+        bool mineMode;
+        bool hasMineBounds;
+        double mineMinLat, mineMaxLat, mineMinLng, mineMaxLng;
 
         // Poziția ta
         bool hasMe;
@@ -84,13 +106,15 @@ namespace ThreeTimes.UI
 
         public MapScreenView(VisualElement root, UIRouter router, MonoBehaviour host, GeospatialTracker tracker,
                              Action<double, double, float, Action<List<SavedTrace>>> loadTraces,
-                             Action<SavedTrace> openTrace)
+                             Action<SavedTrace> openTrace,
+                             Action<Action<List<SavedTrace>, string>> loadMine)
         {
             this.router = router;
             this.host = host;
             this.tracker = tracker;
             this.loadTraces = loadTraces;
             this.openTrace = openTrace;
+            this.loadMine = loadMine;
             config = MapConfig.Load();
 
             screen = root.Q("screen-map");
@@ -106,6 +130,33 @@ namespace ThreeTimes.UI
             cardDistance = root.Q<Label>("map-card-distance");
             cardHint = root.Q<Label>("map-card-hint");
             cardOpen = root.Q<Button>("map-card-open");
+            cardNav = root.Q("map-card-nav");
+            cardPrev = root.Q<Button>("map-card-prev");
+            cardNext = root.Q<Button>("map-card-next");
+            cardIndexLabel = root.Q<Label>("map-card-index");
+            groupPanel = root.Q("map-group");
+            groupGrid = root.Q("map-group-grid");
+            groupTitle = root.Q<Label>("map-group-title");
+            root.Q<Button>("map-group-close").clicked += HideGroupPanel;
+            cardPrev.clicked += () => StepCard(-1);
+            cardNext.clicked += () => StepCard(1);
+            tabAll = root.Q<Button>("map-tab-all");
+            tabMine = root.Q<Button>("map-tab-mine");
+            tabAll.clicked += () => SetMineMode(false);
+            tabMine.clicked += () =>
+            {
+                if (!AccountSession.IsSignedIn)
+                {
+                    router.Toast("„Harta mea” arată unde ai lăsat urme și e doar pentru cei cu cont. Intră în cont din Meniu → Cont.", 5f);
+                    return;
+                }
+                if (!ServerSettings.IsConfigured)
+                {
+                    router.Toast("„Harta mea” are nevoie de server: pune adresa lui în Meniu, la „Server”.", 4f);
+                    return;
+                }
+                SetMineMode(true);
+            };
 
             root.Q<Button>("map-back").clicked += Close;
             root.Q<Button>("map-zoom-in").clicked += () => SetZoom(zoom + 1);
@@ -156,6 +207,15 @@ namespace ThreeTimes.UI
                 centerLat = meLat;
                 centerLng = meLng;
             }
+            if (mineMode)
+            {
+                markerLayer.Clear();
+                markers.Clear();
+            }
+            mineMode = false;
+            hasMineBounds = false;
+            UpdateTabs();
+            fetchedOnce = false; // la redeschidere, urmele din jur se cer din nou (pot fi altele)
             UIRouter.SetVisible(screen, true);
             phone.Start();
             status.text = config.HasKey ? "Caut poziția ta…" :
@@ -172,6 +232,7 @@ namespace ThreeTimes.UI
             tick?.Pause();
             phone.Stop();
             HideCard();
+            HideGroupPanel();
             UIRouter.SetVisible(screen, false);
         }
 
@@ -179,8 +240,11 @@ namespace ThreeTimes.UI
         public void Back()
         {
             if (selected != null) HideCard();
+            else if (IsVisible(groupPanel)) HideGroupPanel();
             else Close();
         }
+
+        static bool IsVisible(VisualElement e) => e != null && !e.ClassListContains("hidden");
 
         // ---------------------------------------------------------------- actualizare
 
@@ -265,11 +329,19 @@ namespace ThreeTimes.UI
         static bool InTimisoara(double lat, double lng) =>
             lat >= MinLat && lat <= MaxLat && lng >= MinLng && lng <= MaxLng;
 
-        /// <summary>Centrul hărții rămâne în zona orașului.</summary>
+        /// <summary>Centrul hărții rămâne în zona orașului (la „Harta mea”, și în zona urmelor tale).</summary>
         void ClampCenter()
         {
-            centerLat = Math.Max(areaMinLat, Math.Min(areaMaxLat, centerLat));
-            centerLng = Math.Max(areaMinLng, Math.Min(areaMaxLng, centerLng));
+            double minLat = areaMinLat, maxLat = areaMaxLat, minLng = areaMinLng, maxLng = areaMaxLng;
+            if (mineMode && hasMineBounds)
+            {
+                minLat = Math.Min(minLat, mineMinLat);
+                maxLat = Math.Max(maxLat, mineMaxLat);
+                minLng = Math.Min(minLng, mineMinLng);
+                maxLng = Math.Max(maxLng, mineMaxLng);
+            }
+            centerLat = Math.Max(minLat, Math.Min(maxLat, centerLat));
+            centerLng = Math.Max(minLng, Math.Min(maxLng, centerLng));
         }
 
         // ---------------------------------------------------------------- Web Mercator
@@ -309,8 +381,7 @@ namespace ThreeTimes.UI
 
             LayoutTiles(left, top, w, h);
 
-            foreach (var (trace, marker) in markers)
-                Place(marker, LngToX(trace.longitude, zoom) - left, LatToY(trace.latitude, zoom) - top, w, h);
+            LayoutMarkers(left, top, w, h);
 
             UIRouter.SetVisible(me, hasMe);
             if (hasMe) Place(me, LngToX(meLng, zoom) - left, LatToY(meLat, zoom) - top, w, h);
@@ -323,6 +394,51 @@ namespace ThreeTimes.UI
             if (!inside) return;
             e.style.left = (float)x;
             e.style.top = (float)y;
+        }
+
+        /// <summary>
+        /// Așază urmele pe ecran și le grupează pe cele prea apropiate: primul semn dintr-un grup rămâne, cu numărul
+        /// urmelor din grup; celelalte se ascund. Grupurile se refac la fiecare mutare sau mărire a hărții.
+        /// </summary>
+        void LayoutMarkers(double left, double top, float w, float h)
+        {
+            var leaders = new List<Marker>();
+            float r2 = ClusterRadius * ClusterRadius;
+            foreach (var m in markers)
+            {
+                m.X = (float)(LngToX(m.Trace.longitude, zoom) - left);
+                m.Y = (float)(LatToY(m.Trace.latitude, zoom) - top);
+                m.OnScreen = m.X > -60 && m.X < w + 60 && m.Y > -60 && m.Y < h + 60;
+                m.Group = null;
+                if (!m.OnScreen)
+                {
+                    m.Element.style.display = DisplayStyle.None;
+                    continue;
+                }
+                Marker leader = null;
+                foreach (var l in leaders)
+                {
+                    float dx = l.X - m.X, dy = l.Y - m.Y;
+                    if (dx * dx + dy * dy < r2) { leader = l; break; }
+                }
+                if (leader != null)
+                {
+                    leader.Group.Add(m.Trace);
+                    m.Element.style.display = DisplayStyle.None;
+                    continue;
+                }
+                m.Group = new List<SavedTrace> { m.Trace };
+                leaders.Add(m);
+                m.Element.style.display = DisplayStyle.Flex;
+                m.Element.style.left = m.X;
+                m.Element.style.top = m.Y;
+            }
+            foreach (var l in leaders)
+            {
+                bool many = l.Group.Count > 1;
+                l.Count.text = many ? l.Group.Count.ToString() : "";
+                UIRouter.SetVisible(l.Count, many);
+            }
         }
 
         void LayoutTiles(double left, double top, float w, float h)
@@ -471,7 +587,7 @@ namespace ThreeTimes.UI
         /// <summary>Cere urmele din zona vizibilă când harta s-a mutat destul sau s-a micșorat.</summary>
         void MaybeFetch()
         {
-            if (fetching || dragging) return;
+            if (mineMode || fetching || dragging) return;
             float w = viewport.layout.width, h = viewport.layout.height;
             if (float.IsNaN(w) || w <= 0f) return;
 
@@ -490,8 +606,86 @@ namespace ThreeTimes.UI
                 fetchLat = lat;
                 fetchLng = lng;
                 fetchRadius = radius;
-                if (IsOpen) BuildMarkers(list);
+                if (IsOpen && !mineMode) BuildMarkers(list);
             });
+        }
+
+        // ---------------------------------------------------------------- „Urme” / „Harta mea”
+
+        void SetMineMode(bool on)
+        {
+            if (on == mineMode) return;
+            mineMode = on;
+            UpdateTabs();
+            HideCard();
+            HideGroupPanel();
+            markerLayer.Clear();
+            markers.Clear();
+            if (on)
+            {
+                LoadMine();
+            }
+            else
+            {
+                hasMineBounds = false;
+                fetchedOnce = false;
+                fetching = false;
+                MaybeFetch();
+            }
+        }
+
+        void UpdateTabs()
+        {
+            tabAll.EnableInClassList("seg--active", !mineMode);
+            tabMine.EnableInClassList("seg--active", mineMode);
+        }
+
+        void LoadMine()
+        {
+            loadMine((list, error) =>
+            {
+                if (!IsOpen || !mineMode) return;
+                if (list == null)
+                {
+                    router.Toast(string.IsNullOrEmpty(error) ? "Nu am putut încărca urmele tale." : error, 4f);
+                    if (!AccountSession.IsSignedIn) SetMineMode(false); // sesiunea a expirat
+                    return;
+                }
+                BuildMarkers(list);
+                if (list.Count == 0)
+                {
+                    router.Toast("Încă nu ai urme în cont. Cele pe care le lași de acum apar aici.", 4f);
+                    return;
+                }
+
+                hasMineBounds = true;
+                mineMinLat = mineMaxLat = list[0].latitude;
+                mineMinLng = mineMaxLng = list[0].longitude;
+                foreach (var t in list)
+                {
+                    mineMinLat = Math.Min(mineMinLat, t.latitude);
+                    mineMaxLat = Math.Max(mineMaxLat, t.latitude);
+                    mineMinLng = Math.Min(mineMinLng, t.longitude);
+                    mineMaxLng = Math.Max(mineMaxLng, t.longitude);
+                }
+                // Dacă nicio urmă nu se vede acum, mutăm harta pe cea mai nouă (prima din listă).
+                if (!AnyMarkerVisible())
+                {
+                    followMe = false;
+                    centerLat = list[0].latitude;
+                    centerLng = list[0].longitude;
+                    Layout();
+                }
+                router.Toast(list.Count == 1 ? "O urmă lăsată de tine." :
+                             list.Count < 20 ? $"{list.Count} urme lăsate de tine." : $"{list.Count} de urme lăsate de tine.", 2.5f);
+            });
+        }
+
+        bool AnyMarkerVisible()
+        {
+            foreach (var m in markers)
+                if (m.Group != null) return true;
+            return false;
         }
 
         void BuildMarkers(List<SavedTrace> list)
@@ -511,11 +705,32 @@ namespace ThreeTimes.UI
                 shape.AddToClassList("map-marker__shape");
                 shape.style.backgroundImage = new StyleBackground(TraceIcon.Get(style));
                 marker.Add(shape);
+                var count = new Label { pickingMode = PickingMode.Ignore };
+                count.AddToClassList("map-marker__count");
+                count.AddToClassList("hidden");
+                marker.Add(count);
 
                 markerLayer.Add(marker);
-                markers.Add((t, marker));
+                markers.Add(new Marker { Trace = t, Element = marker, Count = count });
             }
             Layout();
+        }
+
+        /// <summary>Cardul pentru un grup de urme: arată urma de la poziția index, cu „‹ 1 din 4 ›” dacă sunt mai multe.</summary>
+        void ShowGroup(List<SavedTrace> group, int index)
+        {
+            cardGroup = group;
+            cardIndex = Mathf.Clamp(index, 0, group.Count - 1);
+            ShowCard(group[cardIndex]);
+            bool many = group.Count > 1;
+            UIRouter.SetVisible(cardNav, many);
+            if (many) cardIndexLabel.text = $"{cardIndex + 1} din {group.Count} urme aici";
+        }
+
+        void StepCard(int step)
+        {
+            if (cardGroup == null || cardGroup.Count < 2) return;
+            ShowGroup(cardGroup, (cardIndex + step + cardGroup.Count) % cardGroup.Count);
         }
 
         void ShowCard(SavedTrace t)
@@ -552,9 +767,74 @@ namespace ThreeTimes.UI
             UIRouter.SetVisible(card, true);
         }
 
+        /// <summary>La mărirea maximă, urmele grupului s-ar despărți pe ecran? (altfel n-are rost să mărim)</summary>
+        bool SplitsAtMaxZoom(List<SavedTrace> group)
+        {
+            double unitsPerMeter = Math.Pow(2, MaxZoom) / (156543.03392 * Math.Cos(group[0].latitude * Math.PI / 180.0));
+            for (int i = 0; i < group.Count; i++)
+                for (int j = i + 1; j < group.Count; j++)
+                {
+                    float d = TraceDistance(group[i].latitude, group[i].longitude, group[j].latitude, group[j].longitude);
+                    if (d * unitsPerMeter > ClusterRadius) return true;
+                }
+            return false;
+        }
+
+        /// <summary>Fereastra cu toate urmele unui grup, mari; apare cu un mic „pop”, iar urmele una după alta.</summary>
+        void ShowGroupPanel(List<SavedTrace> group)
+        {
+            HideCard();
+            groupTitle.text = group.Count < 20 ? $"{group.Count} urme aici" : $"{group.Count} de urme aici";
+            groupGrid.Clear();
+            for (int i = 0; i < group.Count; i++)
+            {
+                var t = group[i];
+                var style = TraceStyle.Of(t);
+                int index = i;
+
+                var item = new VisualElement();
+                item.AddToClassList("map-group__item");
+                item.AddToClassList("map-group__item--enter");
+                var holder = new VisualElement { pickingMode = PickingMode.Ignore };
+                holder.AddToClassList("map-group__holder");
+                if (t.mine) holder.AddToClassList("map-group__holder--mine");
+                var backdrop = TraceTypeBackdrop.Create(t.type, style.Color, 64f);
+                if (backdrop != null) holder.Add(backdrop);
+                var shape = new VisualElement { pickingMode = PickingMode.Ignore };
+                shape.AddToClassList("map-group__shape");
+                shape.style.backgroundImage = new StyleBackground(TraceIcon.Get(style));
+                holder.Add(shape);
+                item.Add(holder);
+                var label = new Label(style.Label) { pickingMode = PickingMode.Ignore };
+                label.AddToClassList("map-group__label");
+                label.style.color = style.Ink;
+                item.Add(label);
+                item.RegisterCallback<ClickEvent>(_ =>
+                {
+                    HideGroupPanel();
+                    ShowGroup(group, index);
+                });
+                groupGrid.Add(item);
+                // Urmele apar una după alta.
+                item.schedule.Execute(() => item.RemoveFromClassList("map-group__item--enter")).ExecuteLater(60 + 40 * Math.Min(i, 12));
+            }
+            groupPanel.AddToClassList("map-group--enter");
+            UIRouter.SetVisible(groupPanel, true);
+            groupPanel.schedule.Execute(() => groupPanel.RemoveFromClassList("map-group--enter")).ExecuteLater(20);
+        }
+
+        void HideGroupPanel()
+        {
+            if (groupPanel == null) return;
+            UIRouter.SetVisible(groupPanel, false);
+            groupGrid.Clear();
+        }
+
         void HideCard()
         {
             selected = null;
+            cardGroup = null;
+            UIRouter.SetVisible(cardNav, false);
             UIRouter.SetVisible(card, false);
         }
 
@@ -634,19 +914,42 @@ namespace ThreeTimes.UI
             }
             lastTapTime = now;
 
-            // Atingere: cea mai apropiată urmă de deget, dacă e destul de aproape.
+            // Atingere: cel mai apropiat semn de deget, dacă e destul de aproape.
             Vector2 tap = evt.localPosition;
-            SavedTrace best = null;
+            Marker best = null;
             float bestDistance = TapRadius;
-            foreach (var (trace, marker) in markers)
+            foreach (var m in markers)
             {
-                if (marker.style.display == DisplayStyle.None) continue;
-                var center = new Vector2(marker.style.left.value.value, marker.style.top.value.value);
-                float d = (center - tap).magnitude;
-                if (d < bestDistance) { bestDistance = d; best = trace; }
+                if (m.Group == null) continue; // ascuns sau în grupul altui semn
+                float d = (new Vector2(m.X, m.Y) - tap).magnitude;
+                if (d < bestDistance) { bestDistance = d; best = m; }
             }
-            if (best != null) ShowCard(best);
-            else HideCard();
+            if (best == null)
+            {
+                HideCard();
+                HideGroupPanel();
+                return;
+            }
+            if (best.Group.Count > 1)
+            {
+                // Urmele se despart dacă mărim harta: o mărim pe grup (2 trepte).
+                if (zoom < MaxZoom && SplitsAtMaxZoom(best.Group))
+                {
+                    HideCard();
+                    HideGroupPanel();
+                    followMe = false;
+                    userMoved = true;
+                    centerLat = best.Trace.latitude;
+                    centerLng = best.Trace.longitude;
+                    SetZoom(Math.Min(zoom + 2, MaxZoom));
+                    return;
+                }
+                // Sunt practic în același loc: le arătăm mari, într-o fereastră.
+                ShowGroupPanel(best.Group);
+                return;
+            }
+            HideGroupPanel();
+            ShowGroup(best.Group, 0);
         }
     }
 }

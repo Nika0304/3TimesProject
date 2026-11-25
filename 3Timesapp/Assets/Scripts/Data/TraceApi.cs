@@ -10,7 +10,8 @@ namespace ThreeTimes.Data
 {
     /// <summary>
     /// Cererile către server (backend/README.md descrie API-ul). Toate sunt corutine: se pornesc cu
-    /// StartCoroutine și raportează rezultatul printr-un callback. Telefonul se prezintă cu X-Device-Id.
+    /// StartCoroutine și raportează rezultatul printr-un callback. Telefonul se prezintă cu X-Device-Id
+    /// (și cu tokenul contului, dacă e deschis).
     /// </summary>
     public static class TraceApi
     {
@@ -37,14 +38,19 @@ namespace ThreeTimes.Data
 
         static string Base => ServerSettings.Url + "/api/v1/traces";
 
-        static void Prepare(UnityWebRequest request, int timeout = TimeoutSeconds)
+        /// <summary>
+        /// Antetele comune: id-ul anonim al telefonului și, dacă e deschis un cont, tokenul sesiunii.
+        /// </summary>
+        internal static void Prepare(UnityWebRequest request, int timeout = TimeoutSeconds, bool withAccount = true)
         {
             request.timeout = timeout;
             request.SetRequestHeader("X-Device-Id", ServerSettings.DeviceId);
+            if (withAccount && AccountSession.IsSignedIn)
+                request.SetRequestHeader("Authorization", "Bearer " + AccountSession.Token);
         }
 
         /// <summary>Mesajul de eroare pentru utilizator: cel trimis de server, sau unul despre conexiune.</summary>
-        static string ErrorOf(UnityWebRequest request)
+        internal static string ErrorOf(UnityWebRequest request)
         {
             if (request.result == UnityWebRequest.Result.ConnectionError)
                 return "Serverul nu răspunde.";
