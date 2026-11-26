@@ -34,8 +34,7 @@ public class YearCapsuleRepository {
             AND ST_X(t.location::geometry) BETWEEN y.min_lng AND y.max_lng
             """;
 
-    private static final String MINE =
-            "(t.owner_hash = :device OR (CAST(:user AS uuid) IS NOT NULL AND t.user_id = :user))";
+    private static final String MINE = Viewer.owned("t.user_id", "t.owner_hash", "device", "user");
 
     private static final String COLUMNS = """
             y.id, y.city, y.year, ST_Y(y.location::geometry) AS lat, ST_X(y.location::geometry) AS lng,
@@ -75,6 +74,8 @@ public class YearCapsuleRepository {
                 SELECT %s FROM year_capsule y
                 WHERE ST_DWithin(y.location, ST_SetSRID(ST_MakePoint(:lng, :lat), 4326)::geography, :radius)
                   AND make_timestamptz(y.year, 1, 1, 0, 0, 0, 'Europe/Bucharest') <= CAST(:now AS timestamptz)
+                  AND CAST(:now AS timestamptz) < make_timestamptz(y.year + 1, 1, 1, 0, 0, 0, 'Europe/Bucharest')
+                                                 + INTERVAL '14 days'
                 ORDER BY y.year DESC
                 """.formatted(COLUMNS),
                 who(me).addValue("lat", lat).addValue("lng", lng).addValue("radius", radius),

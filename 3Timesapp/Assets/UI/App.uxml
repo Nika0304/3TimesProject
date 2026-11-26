@@ -137,6 +137,8 @@
                                 <ui:VisualElement class="bar" picking-mode="Ignore" />
                                 <ui:VisualElement class="bar bar--short" picking-mode="Ignore" />
                             </ui:VisualElement>
+                            <!-- Notificări necitite -->
+                            <ui:VisualElement name="menu-button-badge" class="menu-badge-dot hidden" picking-mode="Ignore" />
                         </ui:Button>
                     </ui:VisualElement>
                 </ui:VisualElement>
@@ -208,6 +210,13 @@
                     <ui:Label name="menu-account-label" text="Cont" class="list-item__text" picking-mode="Ignore" />
                     <ui:VisualElement class="icon icon--chevron" picking-mode="Ignore" />
                 </ui:Button>
+                <ui:Button name="menu-notifications" class="list-item">
+                    <ui:Label text="Notificări" class="list-item__text" picking-mode="Ignore" />
+                    <ui:VisualElement class="row list-item__end" picking-mode="Ignore">
+                        <ui:Label name="menu-notifications-badge" text="0" class="count-badge hidden" picking-mode="Ignore" />
+                        <ui:VisualElement class="icon icon--chevron" picking-mode="Ignore" />
+                    </ui:VisualElement>
+                </ui:Button>
                 <ui:Button name="menu-about" class="list-item">
                     <ui:Label text="Despre, surse și confidențialitate" class="list-item__text" picking-mode="Ignore" />
                     <ui:VisualElement class="icon icon--chevron" picking-mode="Ignore" />
@@ -259,6 +268,24 @@
             </ui:VisualElement>
         </ui:VisualElement>
 
+        <!-- Notificări (de la server): de exemplu „urma ta a fost ștearsă de moderatori” -->
+        <ui:VisualElement name="screen-notifications" class="screen screen--paper hidden">
+            <ui:VisualElement class="safe">
+                <ui:VisualElement class="topbar">
+                    <ui:Button name="notifications-back" class="round-btn">
+                        <ui:VisualElement class="icon icon--back" picking-mode="Ignore" />
+                    </ui:Button>
+                    <ui:Label text="Notificări" class="title" />
+                    <ui:VisualElement class="topbar-spacer" />
+                </ui:VisualElement>
+                <ui:Button name="notifications-read-all" text="Marchează tot ca citit" class="btn btn--ghost notifications-read-all hidden" />
+                <ui:ScrollView class="grow">
+                    <ui:Label name="notifications-empty" text="Nu ai notificări." class="caption notifications-empty hidden" />
+                    <ui:VisualElement name="notifications-list" />
+                </ui:ScrollView>
+            </ui:VisualElement>
+        </ui:VisualElement>
+
         <!-- Cont (opțional): autentificare / înregistrare cu email și parolă; după autentificare, contul -->
         <ui:VisualElement name="screen-account" class="screen screen--paper hidden">
             <ui:VisualElement class="safe">
@@ -294,6 +321,7 @@
                         <ui:TextField name="account-email" placeholder-text="nume@exemplu.ro" class="server-input" />
                         <ui:Label text="Parolă" class="field-label" />
                         <ui:TextField name="account-password" class="server-input" />
+                        <ui:Button name="account-forgot" text="Mi-am uitat parola" class="account-forgot" />
 
                         <!-- Doar la cont nou: cât de puternică e parola -->
                         <ui:VisualElement name="account-strength" class="strength hidden">
@@ -309,6 +337,23 @@
                         <ui:Button name="account-submit" text="Intră în cont" class="btn btn--primary account-submit" />
                         <ui:VisualElement class="account-divider" />
                         <ui:Button name="account-skip" text="Continuă fără cont" class="btn btn--secondary" />
+                    </ui:VisualElement>
+
+                    <!-- Codul de 6 cifre primit pe email: activarea contului nou sau parola nouă -->
+                    <ui:VisualElement name="account-code" class="hidden">
+                        <ui:Label name="account-code-title" text="Verifică-ți emailul" class="display display--small account-title" />
+                        <ui:Label name="account-code-intro" text="" class="caption account-intro" />
+                        <ui:Label text="Codul din email" class="field-label" />
+                        <ui:TextField name="account-code-field" placeholder-text="123456" class="server-input account-code-input" />
+                        <ui:VisualElement name="account-new-password-box" class="hidden">
+                            <ui:Label text="Parola nouă" class="field-label" />
+                            <ui:TextField name="account-new-password" class="server-input" />
+                            <ui:Label name="account-new-strength" text="" class="caption strength__label hidden" />
+                        </ui:VisualElement>
+                        <ui:Label name="account-code-error" text="" class="caption account-error hidden" />
+                        <ui:Button name="account-code-submit" text="Activează contul" class="btn btn--primary account-submit" />
+                        <ui:Button name="account-code-resend" text="Trimite alt cod" class="btn btn--ghost" />
+                        <ui:Button name="account-code-cancel" text="Înapoi" class="btn btn--ghost" />
                     </ui:VisualElement>
 
                     <!-- Cu cont -->
@@ -610,11 +655,20 @@
                 </ui:VisualElement>
                 <ui:Label name="detail-text" text="" class="detail-text" />
                 <ui:Label name="detail-meta" text="" class="caption" />
-                <ui:VisualElement class="row detail-actions">
+                <ui:VisualElement name="detail-actions" class="row detail-actions">
                     <ui:Button name="detail-report" text="Raportează" class="btn btn--secondary grow" />
                     <ui:Button name="detail-close" text="Închide" class="btn btn--dark grow gap-left" />
                 </ui:VisualElement>
                 <ui:Button name="detail-delete" text="Șterge urma mea" class="btn btn--ghost" />
+                <!-- La „Raportează”: de ce (motivul ajunge la admin) -->
+                <ui:VisualElement name="detail-reasons" class="detail-reasons hidden">
+                    <ui:Label text="De ce o raportezi?" class="title detail-reasons__title" />
+                    <ui:Button name="detail-reason-offensive" text="Jignitoare sau urâtă" class="btn btn--secondary detail-reason" />
+                    <ui:Button name="detail-reason-spam" text="Spam sau reclamă" class="btn btn--secondary detail-reason" />
+                    <ui:Button name="detail-reason-personal" text="Date personale despre cineva" class="btn btn--secondary detail-reason" />
+                    <ui:Button name="detail-reason-other" text="Altceva" class="btn btn--secondary detail-reason" />
+                    <ui:Button name="detail-reason-cancel" text="Renunță" class="btn btn--ghost" />
+                </ui:VisualElement>
             </ui:VisualElement>
         </ui:VisualElement>
 

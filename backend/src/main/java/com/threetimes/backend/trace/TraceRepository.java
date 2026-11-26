@@ -131,11 +131,12 @@ public class TraceRepository {
                        ST_Distance(t.location, ST_SetSRID(ST_MakePoint(:lng, :lat), 4326)::geography) AS distance
                 FROM trace t
                 WHERE ST_DWithin(t.location, ST_SetSRID(ST_MakePoint(:lng, :lat), 4326)::geography, :radius)
-                  AND (NOT t.hidden OR t.owner_hash = :me OR t.user_id = :uid)
+                  AND (NOT t.hidden OR %s)
                   AND %s
                 ORDER BY distance
                 LIMIT :limit
-                """.formatted(COLUMNS, IN_PRESENT), p, (rs, n) -> map(rs, me).view());
+                """.formatted(COLUMNS, Viewer.owned("t.user_id", "t.owner_hash", "me", "uid"), IN_PRESENT),
+                p, (rs, n) -> map(rs, me).view());
     }
 
     /** Urma e în capsula unui an deja încheiat (de la 1 ianuarie anul următor, ora României)? */
@@ -158,9 +159,9 @@ public class TraceRepository {
         return rows.stream().findFirst();
     }
 
-    /** Id-urile tuturor urmelor mele: ale telefonului și ale contului (și ale celor ascunse). */
+    /** Id-urile tuturor urmelor mele (și ale celor ascunse): ale contului, sau cele lăsate fără cont de pe telefon. */
     public List<String> idsOf(Viewer me) {
-        return jdbc.query("SELECT id FROM trace WHERE owner_hash = :me OR user_id = :uid",
+        return jdbc.query("SELECT id FROM trace t WHERE " + Viewer.owned("t.user_id", "t.owner_hash", "me", "uid"),
                 viewer(new MapSqlParameterSource(), me),
                 (rs, n) -> rs.getObject("id", UUID.class).toString());
     }

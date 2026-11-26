@@ -51,6 +51,22 @@ namespace ThreeTimes.Data
         {
             public string token;
             public AccountInfo account;
+            public bool verificationRequired;   // emailul nu e verificat încă: s-a trimis un cod
+            public string email;
+        }
+
+        [Serializable]
+        class EmailBody
+        {
+            public string email;
+        }
+
+        [Serializable]
+        class CodeBody
+        {
+            public string email;
+            public string code;
+            public string password;             // doar la parola nouă
         }
 
         [Serializable]
@@ -61,40 +77,80 @@ namespace ThreeTimes.Data
 
         static string Base => ServerSettings.Url + "/api/v1/account";
 
-        /// <summary>Înregistrare: done(contul, eroare). La reușită, sesiunea e deja salvată pe telefon.</summary>
+        /// <summary>
+        /// Înregistrare: done(contul, eroare, cere cod). Contul nou se activează cu codul trimis pe email, așa că de
+        /// obicei răspunsul e „cere cod” (fără cont încă); apoi Verify.
+        /// </summary>
         public static IEnumerator Register(string firstName, string lastName, string email, string password,
-                                           Action<AccountInfo, string> done) =>
+                                           Action<AccountInfo, string, bool> done) =>
             Authenticate("/register", JsonUtility.ToJson(new RegisterBody
             {
                 firstName = firstName ?? "", lastName = lastName ?? "", email = email ?? "", password = password ?? ""
             }), done);
 
-        /// <summary>Autentificare: done(contul, eroare). La reușită, sesiunea e deja salvată pe telefon.</summary>
-        public static IEnumerator Login(string email, string password, Action<AccountInfo, string> done) =>
+        /// <summary>
+        /// Autentificare: done(contul, eroare, cere cod). La reușită, sesiunea e deja salvată pe telefon. Dacă emailul
+        /// nu e verificat încă, serverul trimite un cod și răspunsul e „cere cod”.
+        /// </summary>
+        public static IEnumerator Login(string email, string password, Action<AccountInfo, string, bool> done) =>
             Authenticate("/login", JsonUtility.ToJson(new Credentials { email = email ?? "", password = password ?? "" }), done);
 
-        static IEnumerator Authenticate(string path, string json, Action<AccountInfo, string> done)
+        /// <summary>Codul de 6 cifre primit pe email activează contul: done(contul, eroare, _).</summary>
+        public static IEnumerator Verify(string email, string code, Action<AccountInfo, string, bool> done) =>
+            Authenticate("/verify", JsonUtility.ToJson(new CodeBody { email = email ?? "", code = code ?? "", password = null }), done);
+
+        /// <summary>Parola nouă, cu codul primit pe email: done(contul, eroare, _). Contul se deschide pe telefon.</summary>
+        public static IEnumerator ResetPassword(string email, string code, string password,
+                                                Action<AccountInfo, string, bool> done) =>
+            Authenticate("/password/reset",
+                         JsonUtility.ToJson(new CodeBody { email = email ?? "", code = code ?? "", password = password ?? "" }), done);
+
+        /// <summary>Alt cod de verificare pe email: done(gata, eroare).</summary>
+        public static IEnumerator ResendCode(string email, Action<bool, string> done) => PostEmail("/verify/resend", email, done);
+
+        /// <summary>„Mi-am uitat parola”: cod pe email, dacă emailul are cont: done(gata, eroare).</summary>
+        public static IEnumerator ForgotPassword(string email, Action<bool, string> done) =>
+            PostEmail("/password/forgot", email, done);
+
+        static IEnumerator PostEmail(string path, string email, Action<bool, string> done)
+        {
+            byte[] body = System.Text.Encoding.UTF8.GetBytes(JsonUtility.ToJson(new EmailBody { email = email ?? "" }));
+            using var request = new UnityWebRequest(Base + path, "POST", new DownloadHandlerBuffer(), new UploadHandlerRaw(body));
+            request.SetRequestHeader("Content-Type", "application/json");
+            TraceApi.Prepare(request, 20, withAccount: false);
+            yield return request.SendWebRequest();
+            bool ok = request.result == UnityWebRequest.Result.Success;
+            done?.Invoke(ok, ok ? null : TraceApi.ErrorOf(request));
+        }
+
+        static IEnumerator Authenticate(string path, string json, Action<AccountInfo, string, bool> done)
         {
             byte[] body = System.Text.Encoding.UTF8.GetBytes(json);
             using var request = new UnityWebRequest(Base + path, "POST", new DownloadHandlerBuffer(), new UploadHandlerRaw(body));
             request.SetRequestHeader("Content-Type", "application/json");
-            TraceApi.Prepare(request, TimeoutSeconds, withAccount: false);
+            // Trimiterea emailului cu codul poate dura câteva secunde.
+            TraceApi.Prepare(request, 25, withAccount: false);
             yield return request.SendWebRequest();
             if (request.result != UnityWebRequest.Result.Success)
             {
-                done?.Invoke(null, TraceApi.ErrorOf(request));
+                done?.Invoke(null, TraceApi.ErrorOf(request), false);
                 yield break;
             }
             AuthResponse answer = null;
             try { answer = JsonUtility.FromJson<AuthResponse>(request.downloadHandler.text); }
             catch (Exception) { /* tratat mai jos */ }
+            if (answer != null && answer.verificationRequired)
+            {
+                done?.Invoke(null, null, true);
+                yield break;
+            }
             if (answer == null || string.IsNullOrEmpty(answer.token) || answer.account == null)
             {
-                done?.Invoke(null, "Răspuns neașteptat de la server.");
+                done?.Invoke(null, "Răspuns neașteptat de la server.", false);
                 yield break;
             }
             AccountSession.Set(answer.token, answer.account.email, answer.account.FullName);
-            done?.Invoke(answer.account, null);
+            done?.Invoke(answer.account, null, false);
         }
 
         /// <summary>

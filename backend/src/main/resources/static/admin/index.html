@@ -50,6 +50,13 @@
   button.del { color: var(--danger); }
   button.on { background: var(--ink); color: #fff; border-color: var(--ink); }
   button.refresh { background: var(--coral); border-color: var(--coral); color: var(--coral-ink); }
+  .why-del { display: none; margin-top: 12px; padding: 12px; border-radius: 14px; background: #FBE3E1; }
+  .why-del.on { display: block; }
+  .why-del label { display: block; font-size: 13px; color: var(--danger); font-weight: 600; margin-bottom: 6px; }
+  .why-del select, .why-del input { width: 100%; box-sizing: border-box; font: inherit; padding: 8px 10px;
+                                    border: 1px solid var(--line); border-radius: 10px; margin-bottom: 8px; background: #fff; }
+  .why-del .row { display: flex; gap: 8px; }
+  button.del-go { background: var(--danger); border-color: var(--danger); color: #fff; flex: 1; }
   .empty-state { text-align: center; color: var(--muted); padding: 60px 0; }
 </style>
 </head>
@@ -196,19 +203,55 @@
     keep.title = "Închide raportările și marchează urma ca verificată. Urma se vede din nou.";
     keep.onclick = () => act(t, c, "POST", "keep");
     const del = el("button", "del", "Șterge");
-    del.onclick = () => {
-      if (confirm(t.kind === "CAPSULE" ? "Ștergi capsula definitiv (cu poza sau vocea ei)?"
-                                       : "Ștergi urma definitiv (cu poza sau vocea ei)?")) act(t, c, "DELETE", "");
-    };
     actions.append(keep, del);
     c.append(actions);
+
+    // La „Șterge”: motivul (cine a lăsat urma îl primește în aplicație, la Meniu → Notificări).
+    const why = el("div", "why-del");
+    why.append(el("label", null, "Motivul (îl vede cine a lăsat urma, în aplicație)"));
+    const select = document.createElement("select");
+    REASONS.forEach(text => { const o = document.createElement("option"); o.textContent = text; select.append(o); });
+    const other = document.createElement("input");
+    other.placeholder = "Scrie motivul";
+    other.maxLength = 200;
+    other.style.display = "none";
+    select.onchange = () => { other.style.display = select.value === OTHER ? "block" : "none"; };
+    select.value = suggestedReason(t);
+    why.append(select, other);
+    const row = el("div", "row");
+    const cancel = el("button", null, "Renunță");
+    cancel.onclick = () => { why.classList.remove("on"); actions.style.display = ""; };
+    const go = el("button", "del-go", "Șterge și anunță");
+    go.onclick = () => {
+      const reason = select.value === OTHER ? other.value.trim() : select.value;
+      if (!reason) { other.focus(); return; }
+      act(t, c, "DELETE", "", reason);
+    };
+    row.append(cancel, go);
+    why.append(row);
+    c.append(why);
+    del.onclick = () => { why.classList.add("on"); actions.style.display = "none"; };
     return c;
   }
 
-  async function act(t, c, method, action) {
+  // Motivele din aplicație (butoanele de la „Raportează”), plus cele ale adminului.
+  const OTHER = "Alt motiv…";
+  const REASONS = ["Jignitoare sau urâtă", "Spam sau reclamă", "Date personale despre cineva",
+                   "Conținut nepotrivit pentru 3Times", OTHER];
+
+  /** Motivul raportat cel mai des; la urmele marcate de AI, „Conținut nepotrivit”. */
+  function suggestedReason(t) {
+    const counts = {};
+    (t.reportReasons || []).forEach(r => { if (REASONS.includes(r)) counts[r] = (counts[r] || 0) + 1; });
+    const best = Object.keys(counts).sort((a, b) => counts[b] - counts[a])[0];
+    return best || "Conținut nepotrivit pentru 3Times";
+  }
+
+  async function act(t, c, method, action, reason) {
     c.classList.add("gone");
     try {
-      const r = await fetch(`/api/v1/admin/${path(t)}/${t.id}${action ? "/" + action : ""}`, { method });
+      const query = reason ? "?reason=" + encodeURIComponent(reason) : "";
+      const r = await fetch(`/api/v1/admin/${path(t)}/${t.id}${action ? "/" + action : ""}${query}`, { method });
       if (!r.ok && r.status !== 404) throw new Error((await r.json().catch(() => ({}))).error || "Eroare " + r.status);
       items = items.filter(x => !(x.id === t.id && x.kind === t.kind));
       render();

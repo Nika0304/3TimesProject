@@ -66,17 +66,18 @@ namespace ThreeTimes.UI
                 : $"{c.itemCount} {(c.itemCount == 1 ? "urmă" : "urme")}{mineText}, sigilată";
 
             string when = CapsuleText.When(c);
+            const string window = " Apoi are două săptămâni ca s-o deschizi; după aceea dispare.";
             if (c.collecting)
             {
                 text.text = personal
-                    ? $"O umpli doar tu. Când ai terminat, sigileaz-o. Se deschide {when}."
+                    ? $"O umpli doar tu. Când ai terminat, sigileaz-o. Se deschide {when}." + window
                     : c.mine
-                        ? $"Oricine trece pe aici își poate pune urma, până o sigilezi tu (cel mult 7 zile). Se deschide {when}, pentru toți."
-                        : $"Pune-ți și tu urma. Ce e înăuntru rămâne surpriză până {when}, când se deschide pentru toți.";
+                        ? $"Oricine trece pe aici își poate pune urma, până o sigilezi tu (cel mult 7 zile). Se deschide {when}, pentru toți." + window
+                        : $"Pune-ți și tu urma. Ce e înăuntru rămâne surpriză până {when}, când se deschide pentru toți." + window;
             }
             else
             {
-                text.text = $"Nu mai primește urme. Se deschide {when}.";
+                text.text = $"Nu mai primește urme. Se deschide {when}." + window;
             }
 
             UIRouter.SetVisible(add, c.collecting && (!personal || c.mine) && addItem != null);
@@ -125,7 +126,7 @@ namespace ThreeTimes.UI
                 title.text = $"Capsula anului {y.year}";
                 count.text = $"{y.itemCount} {urme} până acum{mineText}";
                 text.text = $"Urmele lăsate în {city} în {y.year}, cu bifa „capsula anului”, se strâng aici. " +
-                            $"Se deschide {CapsuleText.When(y)}, pentru toți.";
+                            $"Se deschide {CapsuleText.When(y)}, pentru toți, și poate fi deschisă două săptămâni.";
             }
             UIRouter.SetVisible(add, false);
             UIRouter.SetVisible(seal, false);

@@ -163,9 +163,23 @@ namespace ThreeTimes.AR
             OnModeChanged(mainView.Mode);
         }
 
+        /// <summary>
+        /// Alt cont (sau fără cont): urmele de pe telefon ale contului de dinainte rămân salvate, dar nu mai sunt „ale
+        /// mele”; se iau cele ale contului nou. Urmele și capsulele de la server se cer din nou (alt „al meu”).
+        /// </summary>
         void OnAccountChanged()
         {
+            TraceStore.Save(saved);
+            foreach (var t in saved) RemoveLive(t.id);
+            saved = TraceStore.Load();
+            foreach (var id in new List<string>(remote.Keys)) RemoveLive(id);
+            remote.Clear();
+            foreach (var id in new List<string>(capsules.Keys)) RemoveLive(id);
+            capsules.Clear();
+            mainView.SetTraceCount(saved.Count);
             nextFetch = 0f;
+            OnModeChanged(mainView.Mode);
+            if (tracker.Simulated && simShown) mainView.ShowSimulatedTraces(ShownForSim());
         }
 
         /// <summary>
@@ -416,11 +430,11 @@ namespace ThreeTimes.AR
 
         static int RoundTo(float value, int step) => Mathf.Max(step, Mathf.RoundToInt(value / step) * step);
 
-        void Report(SavedTrace trace)
+        void Report(SavedTrace trace, string reason)
         {
             if (trace.IsCapsuleItem)
             {
-                ReportCapsuleItem(trace);
+                ReportCapsuleItem(trace, reason);
                 return;
             }
             if (trace.mine)
@@ -435,7 +449,7 @@ namespace ThreeTimes.AR
                 router.Toast("Mulțumim. Raportarea ajunge la moderatori când aplicația e legată de server.", 4f);
                 return;
             }
-            mainView.StartCoroutine(TraceApi.Report(trace.id, null, (ok, error) =>
+            mainView.StartCoroutine(TraceApi.Report(trace.id, reason, (ok, error) =>
             {
                 if (ok)
                 {
@@ -522,7 +536,9 @@ namespace ThreeTimes.AR
             bool future = mainView.Mode == TimeMode.Future;
             var list = future ? new List<SavedTrace>() : AllTraces();
             foreach (var c in capsules.Values)
-                if (future ? (c.@sealed || justOpened.Contains(c.id)) : !c.@sealed) list.Add(c);
+                if (future ? ((c.@sealed && !TraceTime.CapsuleExpired(c)) || justOpened.Contains(c.id))
+                           : (!c.@sealed && TraceTime.CapsuleItemsVisible(c)))
+                    list.Add(c);
             return list;
         }
 
@@ -687,6 +703,7 @@ namespace ThreeTimes.AR
             target.unlockAt = source.unlockAt;
             target.ready = source.ready;
             target.opened = source.opened;
+            target.openedAt = source.openedAt;
             target.@sealed = source.@sealed;
             target.collecting = source.collecting;
             target.itemCount = source.itemCount;
@@ -786,12 +803,20 @@ namespace ThreeTimes.AR
             if (onServer == null) yield break;
 
             var gone = saved.FindAll(t => t.synced && !onServer.Contains(TraceStore.NormalizeId(t.id)));
+            // Urmele vechi puse „din ghicit” pe contul de acum, dar care pe server sunt ale altui cont: doar le scoatem.
+            var notMine = gone.FindAll(t => t.ownerGuessed);
+            if (notMine.Count > 0)
+            {
+                RemoveLocal(notMine);
+                gone.RemoveAll(t => t.ownerGuessed);
+                TestLog.Add($"Urme ale altui cont scoase de pe telefon: {notMine.Count}");
+            }
             if (gone.Count == 0) yield break;
             RemoveLocal(gone);
             TestLog.Add($"Urme șterse de moderatori: {gone.Count}");
             router.Toast(gone.Count == 1
-                ? "Una dintre urmele tale a fost ștearsă de moderatori."
-                : $"{gone.Count} dintre urmele tale au fost șterse de moderatori.", 5f);
+                ? "Una dintre urmele tale a fost ștearsă de moderatori. De ce: Meniu → Notificări."
+                : $"{gone.Count} dintre urmele tale au fost șterse de moderatori. De ce: Meniu → Notificări.", 5f);
         }
 
         void RemoveLocal(List<SavedTrace> traces)
@@ -903,7 +928,12 @@ namespace ThreeTimes.AR
         /// </summary>
         void ForgetMyTraces()
         {
-            int count = saved.Count;
+            // Contul s-a închis deja (AccountSession.Clear), așa că „saved” are acum urmele lăsate fără cont de pe
+            // telefon, șterse și ele pe server. Urmele contului șters stau separat în fișier: le scoatem și pe ele.
+            var dropped = TraceStore.DropOwner(AccountSession.PreviousEmail);
+            PostcardStore.DeleteOwner(AccountSession.PreviousEmail);
+            foreach (var t in dropped) MediaStore.Delete(t.mediaFile);
+            int count = saved.Count + dropped.Count;
             RemoveLocal(new List<SavedTrace>(saved));
             foreach (var t in new List<SavedTrace>(remote.Values))
             {
@@ -1132,6 +1162,11 @@ namespace ThreeTimes.AR
                     capsule.collecting && capsule.myItems > 0 ? () => RemoveMyCapsuleItems(capsule) : (Action)null);
                 return;
             }
+            if (TraceTime.CapsuleExpired(capsule))
+            {
+                router.Toast("Capsula nu mai poate fi deschisă: au trecut cele două săptămâni de după data ei.", 5f);
+                return;
+            }
             if (!tracker.Fix.HasValue)
             {
                 router.Toast("Așteaptă să se termine localizarea, apoi atinge din nou capsula.", 4f);
@@ -1152,6 +1187,8 @@ namespace ThreeTimes.AR
                         return;
                     }
                     CopyCapsule(capsule, opened);
+                    // Capsula anului nu e ținută minte pe server: ora deschiderii o notăm aici.
+                    if (string.IsNullOrEmpty(capsule.openedAt)) capsule.openedAt = RomaniaTime.Iso(TestClock.UtcNow);
                     justOpened.Add(capsule.id);
                     TestLog.Add("Capsulă deschisă");
                     RevealCapsule(capsule);
@@ -1210,7 +1247,7 @@ namespace ThreeTimes.AR
             }));
         }
 
-        void ReportCapsuleItem(SavedTrace item)
+        void ReportCapsuleItem(SavedTrace item, string reason)
         {
             if (item.mine)
             {
@@ -1218,7 +1255,7 @@ namespace ThreeTimes.AR
                 return;
             }
             item.reported = true;
-            mainView.StartCoroutine(CapsuleApi.ReportItem(item.id, null, (ok, error) =>
+            mainView.StartCoroutine(CapsuleApi.ReportItem(item.id, reason, (ok, error) =>
             {
                 if (ok)
                 {
@@ -1309,6 +1346,8 @@ namespace ThreeTimes.AR
         void Commit(SavedTrace trace)
         {
             trace.mine = true;
+            trace.owner = TraceStore.CurrentOwner;
+            trace.ownerGuessed = false;
             trace.synced = false;
             saved.Add(trace);
             TraceStore.Save(saved);

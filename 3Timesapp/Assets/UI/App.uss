@@ -736,6 +736,7 @@
 .topbar-spacer { width: 44px; }
 .log-intro { margin: 8px 0 10px 0; }
 .log-scroll {
+    min-height: 120px;
     background-color: var(--surface);
     border-width: 1px;
     border-color: var(--line);
@@ -1201,6 +1202,19 @@
 /* ---------- cont: „Intră în cont” / „Cont nou”, puterea parolei ---------- */
 
 .account-tabs { margin-top: 8px; }
+.account-forgot,
+.account-forgot:hover {
+    align-self: flex-end;
+    margin: 8px 0 0 0;
+    padding: 4px 2px;
+    background-color: rgba(0, 0, 0, 0);
+    border-width: 0;
+    font-size: 15px;
+    color: var(--ink);
+    -unity-font-style: bold;
+}
+.account-forgot:active { opacity: 0.6; }
+.account-code-input { font-size: 24px; letter-spacing: 6px; -unity-text-align: middle-center; }
 .account-name { flex-basis: 0; }
 .gap-small { margin-left: 6px; }
 .strength { margin-top: 10px; }
@@ -1364,6 +1378,7 @@
 
 /* Ceasul de test, în Jurnal de test */
 .log-clock {
+    flex-shrink: 0;   /* nu se strânge când jurnalul e lung (altfel butonul ajunge sub listă) */
     margin: 4px 0 12px 0;
     padding: 14px 16px;
     border-radius: 20px;
@@ -1380,3 +1395,57 @@
 .log-clock-text { margin: 4px 0 0 0; padding: 0; white-space: normal; }
 .log-clock-btn { margin: 12px 0 0 0; }
 .sim-trace__label--anniversary { background-color: #FFF1C9; color: #8A5A00; }
+
+/* Motivul raportării (în cardul urmei) */
+.detail-reasons { margin-top: 4px; }
+.detail-reasons__title { font-size: 18px; margin: 0 0 4px 0; }
+.detail-reason { margin-top: 8px; }
+
+/* ---------- notificări ---------- */
+
+.menu-badge-dot {
+    position: absolute;
+    top: 7px;
+    right: 7px;
+    width: 10px;
+    height: 10px;
+    border-radius: 5px;
+    background-color: #D93A2B;
+    border-width: 2px;
+    border-color: #FFFFFF;
+}
+.list-item__end { align-items: center; }
+.count-badge {
+    min-width: 24px;
+    height: 24px;
+    margin: 0 10px 0 0;
+    padding: 0 7px;
+    border-radius: 12px;
+    background-color: #D93A2B;
+    color: #FFFFFF;
+    font-size: 13px;
+    -unity-font-style: bold;
+    -unity-text-align: middle-center;
+}
+.notifications-read-all { align-self: flex-end; margin: 4px 0 4px 0; }
+.notifications-empty { margin-top: 24px; -unity-text-align: middle-center; white-space: normal; }
+.notification,
+.notification:hover {
+    flex-direction: column;
+    align-items: stretch;
+    margin: 12px 0 0 0;
+    padding: 14px 16px;
+    border-width: 1px;
+    border-color: var(--line);
+    border-radius: 20px;
+    background-color: var(--surface);
+    -unity-text-align: upper-left;
+}
+.notification:active { background-color: var(--bg); }
+.notification--unread,
+.notification--unread:hover { background-color: var(--present-tint); border-color: var(--present-tint); }
+.notification__head { align-items: center; }
+.notification__dot { width: 9px; height: 9px; border-radius: 5px; background-color: #D93A2B; margin-right: 8px; }
+.notification__title { font-size: 16px; color: var(--ink); -unity-font-style: bold; margin: 0; padding: 0; white-space: normal; }
+.notification__body { font-size: 15px; color: var(--ink); margin: 6px 0 0 0; padding: 0; white-space: normal; }
+.notification__when { margin: 6px 0 0 0; padding: 0; }

@@ -35,6 +35,8 @@ namespace ThreeTimes.Data
 
         // Legătura cu serverul
         public bool mine = true;      // lăsată de telefonul acesta (urmele primite de la server spun singure)
+        public string owner;          // urmele salvate pe telefon: emailul contului cu care a fost lăsată; gol = fără cont
+        public bool ownerGuessed;     // urmă de dinainte de 26 nov (fără owner): pusă pe contul deschis atunci
         public bool synced;           // urma proprie a ajuns pe server
         public bool hasMedia;         // are poză sau voce pe server (la urmele altora, fișierul se descarcă la deschidere)
         public string syncError;      // serverul a refuzat-o (nu se mai retrimite); gol dacă e în regulă
@@ -46,6 +48,7 @@ namespace ThreeTimes.Data
         public string unlockAt;       // ISO 8601, UTC: de când se poate deschide
         public bool ready;            // data a venit (după ceasul serverului, la ultima cerere)
         public bool opened;           // am deschis-o (de pe telefonul sau din contul acesta)
+        public string openedAt;       // când am deschis-o (ISO 8601, UTC)
         public bool @sealed;          // încă închisă pentru mine: urmele din ea nu sunt trimise
         public bool collecting;       // mai primește urme (de grup: până o sigilează creatorul)
         public int itemCount;         // câte urme are
@@ -80,6 +83,8 @@ namespace ThreeTimes.Data
     /// <summary>
     /// Ține urmele PROPRII într-un fișier JSON pe telefon (persistentDataPath/traces.json), împreună cu
     /// ștergerile care încă n-au ajuns la server. Urmele altora vin de la server și nu se salvează.
+    /// Fiecare urmă ține minte contul cu care a fost lăsată (owner). Load() dă doar urmele contului deschis acum (sau,
+    /// fără cont, pe cele lăsate fără cont); celelalte rămân în fișier, neatinse, până intră din nou contul lor.
     /// </summary>
     public static class TraceStore
     {
@@ -93,6 +98,13 @@ namespace ThreeTimes.Data
         /// <summary>Id-urile urmelor proprii șterse pe telefon, dar încă nu și pe server.</summary>
         public static List<string> PendingDeletes { get; private set; } = new List<string>();
 
+        /// <summary>Urmele altor conturi lăsate de pe telefonul acesta: se păstrează în fișier, dar nu se arată.</summary>
+        static List<SavedTrace> others = new List<SavedTrace>();
+
+        /// <summary>Al cui e telefonul acum: emailul contului deschis (litere mici) sau gol, fără cont.</summary>
+        public static string CurrentOwner =>
+            AccountSession.IsSignedIn ? (AccountSession.Email ?? "").Trim().ToLowerInvariant() : "";
+
         static string FilePath => Path.Combine(Application.persistentDataPath, "traces.json");
 
         public static List<SavedTrace> Load()
@@ -103,13 +115,28 @@ namespace ThreeTimes.Data
                 var data = JsonUtility.FromJson<FileData>(File.ReadAllText(FilePath));
                 PendingDeletes = data?.pendingDeletes ?? new List<string>();
                 var traces = data?.traces ?? new List<SavedTrace>();
-                // Urmele vechi aveau id-ul fără cratime; serverul le scrie cu cratime. Le aducem la aceeași formă.
+                string me = CurrentOwner;
+                var mine = new List<SavedTrace>();
+                others = new List<SavedTrace>();
                 foreach (var t in traces)
                 {
+                    // Urmele vechi aveau id-ul fără cratime; serverul le scrie cu cratime. Le aducem la aceeași formă.
                     t.id = NormalizeId(t.id);
                     t.mine = true;
+                    if (t.owner == null)
+                    {
+                        // Lăsate înainte să ținem minte contul: le dăm contului deschis acum.
+                        t.owner = me;
+                        t.ownerGuessed = true;
+                    }
+                    else if (t.owner.Length == 0 && me.Length > 0)
+                    {
+                        // Lăsate fără cont: la autentificare trec în cont (serverul face la fel).
+                        t.owner = me;
+                    }
+                    (t.owner == me ? mine : others).Add(t);
                 }
-                return traces;
+                return mine;
             }
             catch (Exception e)
             {
@@ -122,7 +149,9 @@ namespace ThreeTimes.Data
         {
             try
             {
-                File.WriteAllText(FilePath, JsonUtility.ToJson(new FileData { traces = traces, pendingDeletes = PendingDeletes }, true));
+                var all = new List<SavedTrace>(traces);
+                all.AddRange(others);
+                File.WriteAllText(FilePath, JsonUtility.ToJson(new FileData { traces = all, pendingDeletes = PendingDeletes }, true));
             }
             catch (Exception e)
             {
@@ -130,6 +159,17 @@ namespace ThreeTimes.Data
             }
         }
     
+        /// <summary>Scoate din fișier urmele unui cont (șters); le întoarce, ca să li se șteargă și pozele / vocile.</summary>
+        public static List<SavedTrace> DropOwner(string owner)
+        {
+            var dropped = new List<SavedTrace>();
+            if (string.IsNullOrEmpty(owner)) return dropped;
+            string key = owner.Trim().ToLowerInvariant();
+            dropped = others.FindAll(t => t.owner == key);
+            others.RemoveAll(t => t.owner == key);
+            return dropped;
+        }
+
         /// <summary>Id-ul în forma serverului: GUID cu cratime, litere mici.</summary>
         public static string NormalizeId(string id) =>
             Guid.TryParse(id, out var g) ? g.ToString() : id;

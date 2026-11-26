@@ -28,7 +28,10 @@ namespace ThreeTimes.UI
 
         public bool IsOpen { get; private set; }
 
-        public event Action<SavedTrace> ReportRequested;
+        /// <summary>Raportare, cu motivul ales (ajunge la admin).</summary>
+        public event Action<SavedTrace, string> ReportRequested;
+
+        readonly VisualElement actionsRow, reasons;
         public event Action<SavedTrace> DeleteRequested;
 
         public TraceDetailView(VisualElement root, UIRouter router, VoicePlayer player)
@@ -51,13 +54,27 @@ namespace ThreeTimes.UI
 
             root.Q<Button>("detail-close").clicked += Close;
             root.Q<Button>("detail-dim").clicked += Close;
+            actionsRow = root.Q("detail-actions");
+            reasons = root.Q("detail-reasons");
+            // „Raportează” arată întâi motivele; atingerea unui motiv trimite raportarea.
             reportButton.clicked += () =>
             {
                 if (current == null) return;
-                var trace = current;
-                Close();
-                ReportRequested?.Invoke(trace);
+                ShowReasons(true);
             };
+            void Reason(string button, string reason) =>
+                root.Q<Button>(button).clicked += () =>
+                {
+                    if (current == null) return;
+                    var trace = current;
+                    Close();
+                    ReportRequested?.Invoke(trace, reason);
+                };
+            Reason("detail-reason-offensive", "Jignitoare sau urâtă");
+            Reason("detail-reason-spam", "Spam sau reclamă");
+            Reason("detail-reason-personal", "Date personale despre cineva");
+            Reason("detail-reason-other", "Altceva");
+            root.Q<Button>("detail-reason-cancel").clicked += () => ShowReasons(false);
             deleteButton = root.Q<Button>("detail-delete");
             deleteButton.clicked += () =>
             {
@@ -68,11 +85,20 @@ namespace ThreeTimes.UI
             };
         }
 
+        void ShowReasons(bool on)
+        {
+            UIRouter.SetVisible(reasons, on);
+            UIRouter.SetVisible(actionsRow, !on);
+            if (on) UIRouter.SetVisible(deleteButton, false);
+        }
+
         public void Open(SavedTrace trace)
         {
             if (trace == null) return;
             current = trace;
             IsOpen = true;
+            UIRouter.SetVisible(reasons, false);
+            UIRouter.SetVisible(actionsRow, true);
 
             // Forma și culoarea emoției, așa cum le-a ales AI-ul (sau cele vechi, pentru urmele de dinainte).
             var style = TraceStyle.Of(trace);

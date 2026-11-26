@@ -21,7 +21,7 @@ namespace ThreeTimes.Data
             public string id;
             public double latitude, longitude, altitude;
             public float heightAboveTerrain = 1.2f, accuracyMeters, yawAccuracyDegrees;
-            public string createdAt, visibility, unlockAt;
+            public string createdAt, visibility, unlockAt, openedAt;
             public bool mine, ready, opened, @sealed, collecting;
             public int itemCount, myItems, maxItems;
             public List<SavedTrace> items = new List<SavedTrace>();
@@ -44,6 +44,7 @@ namespace ThreeTimes.Data
                     mine = mine,
                     ready = ready,
                     opened = opened,
+                    openedAt = openedAt,
                     @sealed = @sealed,
                     collecting = collecting,
                     itemCount = itemCount,

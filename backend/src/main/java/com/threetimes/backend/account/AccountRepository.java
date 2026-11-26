@@ -61,8 +61,71 @@ public class AccountRepository {
                 rs.getString("email"),
                 rs.getString("password_hash"),
                 rs.getString("google_sub"),
-                rs.getObject("created_at", OffsetDateTime.class)));
+                rs.getObject("created_at", OffsetDateTime.class),
+                rs.getBoolean("email_verified")));
         return rows.stream().findFirst();
+    }
+
+    /** Un cont încă neverificat primește alt nume / altă parolă (cineva se înregistrează din nou cu același email). */
+    public void updateUnverified(UUID id, String firstName, String lastName, String passwordHash) {
+        jdbc.update("""
+                UPDATE app_user SET first_name = :first, last_name = :last, password_hash = :hash
+                WHERE id = :id AND NOT email_verified
+                """, new MapSqlParameterSource()
+                .addValue("id", id).addValue("first", firstName).addValue("last", lastName).addValue("hash", passwordHash));
+    }
+
+    public void markVerified(UUID id) {
+        jdbc.update("UPDATE app_user SET email_verified = TRUE WHERE id = :id", new MapSqlParameterSource("id", id));
+    }
+
+    public void setPassword(UUID id, String passwordHash) {
+        jdbc.update("UPDATE app_user SET password_hash = :hash WHERE id = :id",
+                new MapSqlParameterSource().addValue("id", id).addValue("hash", passwordHash));
+    }
+
+    /** Închide toate sesiunile contului (după parola nouă: telefoanele vechi trebuie să intre din nou). */
+    public void deleteSessions(UUID user) {
+        jdbc.update("DELETE FROM user_session WHERE user_id = :u", new MapSqlParameterSource("u", user));
+    }
+
+    // ---------------------------------------------------------------- codurile trimise pe email
+
+    /** Salvează codul nou (îl înlocuiește pe cel vechi, cu încercările de la zero). */
+    public void saveCode(UUID user, String purpose, String codeHash, int minutes) {
+        jdbc.update("""
+                INSERT INTO email_code (user_id, purpose, code_hash, expires_at)
+                VALUES (:u, :p, :h, now() + make_interval(mins => :m))
+                ON CONFLICT (user_id, purpose) DO UPDATE
+                SET code_hash = EXCLUDED.code_hash, expires_at = EXCLUDED.expires_at, attempts = 0, created_at = now()
+                """, new MapSqlParameterSource().addValue("u", user).addValue("p", purpose).addValue("h", codeHash)
+                .addValue("m", minutes));
+    }
+
+    public Optional<OffsetDateTime> codeSentAt(UUID user, String purpose) {
+        List<OffsetDateTime> rows = jdbc.query("SELECT created_at FROM email_code WHERE user_id = :u AND purpose = :p",
+                new MapSqlParameterSource().addValue("u", user).addValue("p", purpose),
+                (rs, n) -> rs.getObject("created_at", OffsetDateTime.class));
+        return rows.stream().findFirst();
+    }
+
+    public Optional<AccountDtos.StoredCode> code(UUID user, String purpose) {
+        List<AccountDtos.StoredCode> rows = jdbc.query(
+                "SELECT code_hash, expires_at, attempts FROM email_code WHERE user_id = :u AND purpose = :p",
+                new MapSqlParameterSource().addValue("u", user).addValue("p", purpose),
+                (rs, n) -> new AccountDtos.StoredCode(rs.getString("code_hash"),
+                        rs.getObject("expires_at", OffsetDateTime.class), rs.getInt("attempts")));
+        return rows.stream().findFirst();
+    }
+
+    public void codeFailed(UUID user, String purpose) {
+        jdbc.update("UPDATE email_code SET attempts = attempts + 1 WHERE user_id = :u AND purpose = :p",
+                new MapSqlParameterSource().addValue("u", user).addValue("p", purpose));
+    }
+
+    public void deleteCode(UUID user, String purpose) {
+        jdbc.update("DELETE FROM email_code WHERE user_id = :u AND purpose = :p",
+                new MapSqlParameterSource().addValue("u", user).addValue("p", purpose));
     }
 
     public void createSession(String tokenHash, UUID user) {
@@ -91,6 +154,13 @@ public class AccountRepository {
         // Și capsulele lăsate de pe telefon trec în cont (rămân „ale mele” și de pe alt telefon).
         jdbc.update("UPDATE capsule SET user_id = :u WHERE owner_hash = :d AND user_id IS NULL", p);
         jdbc.update("UPDATE capsule_item SET user_id = :u WHERE owner_hash = :d AND user_id IS NULL", p);
+        // Notificările telefonului (urme lăsate fără cont) trec și ele în cont.
+        jdbc.update("UPDATE notification SET user_id = :u WHERE device_hash = :d AND user_id IS NULL", p);
+        // Și capsulele deschise fără cont de pe telefon rămân deschise pentru cont.
+        jdbc.update("""
+                UPDATE capsule_open o SET user_id = :u WHERE o.device_hash = :d AND o.user_id IS NULL
+                  AND NOT EXISTS (SELECT 1 FROM capsule_open x WHERE x.capsule_id = o.capsule_id AND x.user_id = :u)
+                """, p);
         return jdbc.update("UPDATE trace SET user_id = :u WHERE owner_hash = :d AND user_id IS NULL", p);
     }
 
@@ -101,14 +171,16 @@ public class AccountRepository {
     }
 
     /**
-     * Șterge contul, urmele lui și urmele lăsate de pe telefonul acesta (cu pozele și vocile lor).
+     * Șterge contul, urmele lui și urmele lăsate fără cont de pe telefonul acesta (cu pozele și vocile lor).
+     * Urmele altor conturi lăsate de pe același telefon rămân.
      * Sesiunile se șterg odată cu contul (ON DELETE CASCADE). Întoarce câte urme s-au șters.
      */
     public int deleteAccount(UUID user, String deviceHash) {
         var p = new MapSqlParameterSource().addValue("u", user).addValue("d", deviceHash, Types.CHAR);
-        int traces = jdbc.update("DELETE FROM trace WHERE user_id = :u OR owner_hash = :d", p);
-        jdbc.update("DELETE FROM capsule WHERE user_id = :u OR owner_hash = :d", p);
-        jdbc.update("DELETE FROM capsule_item WHERE user_id = :u OR owner_hash = :d", p);
+        int traces = jdbc.update("DELETE FROM trace WHERE user_id = :u OR (user_id IS NULL AND owner_hash = :d)", p);
+        jdbc.update("DELETE FROM capsule WHERE user_id = :u OR (user_id IS NULL AND owner_hash = :d)", p);
+        jdbc.update("DELETE FROM capsule_item WHERE user_id = :u OR (user_id IS NULL AND owner_hash = :d)", p);
+        jdbc.update("DELETE FROM notification WHERE user_id IS NULL AND device_hash = :d", p);
         jdbc.update("DELETE FROM app_user WHERE id = :u", new MapSqlParameterSource("u", user));
         return traces;
     }

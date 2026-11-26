@@ -89,6 +89,9 @@ public class YearCapsuleController {
         Row row = repository.find(id, me).orElseThrow(ApiException::notFound);
         if (TestClock.now().isBefore(Instant.parse(row.unlockAt())))
             throw ApiException.forbidden("Capsula anului " + row.year() + " se deschide pe 1 ianuarie " + (row.year() + 1) + ".");
+        // Ca la capsulele obișnuite: se poate deschide două săptămâni (1–14 ianuarie), apoi dispare.
+        if (!TestClock.now().isBefore(Instant.parse(row.unlockAt()).plus(java.time.Duration.ofDays(14))))
+            throw ApiException.forbidden("Capsula anului " + row.year() + " nu mai poate fi deschisă: s-a putut până pe 14 ianuarie.");
         if (at == null || at.latitude() == null || at.longitude() == null)
             throw ApiException.badRequest("Lipsește poziția telefonului.");
         double distance = repository.distance(id, at.latitude(), at.longitude());

@@ -23,18 +23,59 @@ namespace ThreeTimes.Core
         }
 
         /// <summary>Câți ani are urma, dacă e acum în săptămâna aniversării ei; altfel 0.</summary>
-        public static int AnniversaryYears(SavedTrace t)
+        public static int AnniversaryYears(SavedTrace t) =>
+            RomaniaTime.TryParseUtc(t.createdAt, out var created) ? AnniversaryOf(created, AnniversaryDays) : 0;
+
+        /// <summary>
+        /// Câți ani au trecut, dacă acum e în cele `days` zile ale unei aniversări a momentului (cel mult maxYears);
+        /// altfel 0.
+        /// </summary>
+        static int AnniversaryOf(DateTime utc, int days, int maxYears = 30)
         {
-            if (!RomaniaTime.TryParseUtc(t.createdAt, out var created)) return 0;
-            var day = RomaniaTime.FromUtc(created).Date;
+            var day = RomaniaTime.FromUtc(utc).Date;
             var today = RomaniaTime.Today;
-            for (int k = 1; k <= 30; k++)
+            for (int k = 1; k <= maxYears; k++)
             {
                 var start = day.AddYears(k);
                 if (start > today) break;
-                if (today < start.AddDays(AnniversaryDays)) return k;
+                if (today < start.AddDays(days)) return k;
             }
             return 0;
+        }
+
+        // ---------------------------------------------------------------- capsulele (decis 26 nov)
+
+        /// <summary>După dată, capsula se mai poate deschide atâtea zile; apoi dispare pentru cine n-a deschis-o.</summary>
+        public const int CapsuleOpenDays = 14;
+        /// <summary>După deschidere, urmele din ea se văd atâtea zile (și la fiecare aniversare a deschiderii).</summary>
+        public const int CapsuleItemsDays = 7;
+
+        /// <summary>N-am deschis-o și au trecut cele două săptămâni de după dată: nu se mai poate deschide.</summary>
+        public static bool CapsuleExpired(SavedTrace c)
+        {
+            if (c.opened || !RomaniaTime.TryParseUtc(c.unlockAt, out var unlock)) return false;
+            return TestClock.UtcNow >= unlock.AddDays(CapsuleOpenDays);
+        }
+
+        /// <summary>Câte zile mai sunt ca s-o deschizi (după dată), sau -1 dacă nu e cazul.</summary>
+        public static int CapsuleDaysLeft(SavedTrace c)
+        {
+            if (c.opened || !RomaniaTime.TryParseUtc(c.unlockAt, out var unlock)) return -1;
+            var now = TestClock.UtcNow;
+            if (now < unlock) return -1;
+            var left = unlock.AddDays(CapsuleOpenDays) - now;
+            return left <= TimeSpan.Zero ? 0 : (int)Math.Ceiling(left.TotalDays);
+        }
+
+        /// <summary>
+        /// Urmele dintr-o capsulă deschisă se văd o săptămână de când am deschis-o și încă o săptămână la un an de la
+        /// deschidere; apoi nu mai apar (decis 26 nov: după aceea se fac oricum alte capsule).
+        /// </summary>
+        public static bool CapsuleItemsVisible(SavedTrace c)
+        {
+            if (!c.opened) return false;
+            if (!RomaniaTime.TryParseUtc(c.openedAt, out var opened)) return true; // abia deschisă
+            return TestClock.UtcNow < opened.AddDays(CapsuleItemsDays) || AnniversaryOf(opened, CapsuleItemsDays, 1) > 0;
         }
 
         /// <summary>

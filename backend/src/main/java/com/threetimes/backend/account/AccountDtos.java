@@ -25,12 +25,39 @@ public final class AccountDtos {
             boolean hasGoogle) {
     }
 
-    /** Răspunsul la înregistrare / autentificare: tokenul sesiunii (se trimite ca „Authorization: Bearer ...”). */
-    public record AuthResponse(String token, AccountView account) {
+    /**
+     * Răspunsul la înregistrare / autentificare: tokenul sesiunii (se trimite ca „Authorization: Bearer ...”).
+     * Dacă emailul nu e încă verificat: fără token, verificationRequired = true și emailul unde s-a trimis codul.
+     */
+    public record AuthResponse(String token, AccountView account, boolean verificationRequired, String email) {
+
+        static AuthResponse session(String token, AccountView account) {
+            return new AuthResponse(token, account, false, account.email());
+        }
+
+        static AuthResponse needsCode(String email) {
+            return new AuthResponse(null, null, true, email);
+        }
+    }
+
+    /** Doar emailul: cere alt cod de verificare / cod pentru parola nouă. */
+    public record EmailRequest(String email) {
+    }
+
+    /** Codul de 6 cifre primit pe email, pentru activarea contului. */
+    public record VerifyRequest(String email, String code) {
+    }
+
+    /** Parola nouă, cu codul primit pe email. */
+    public record ResetRequest(String email, String code, String password) {
     }
 
     /** Un cont din bază. */
     record User(java.util.UUID id, String firstName, String lastName, String email, String passwordHash, String googleSub,
-                java.time.OffsetDateTime createdAt) {
+                java.time.OffsetDateTime createdAt, boolean emailVerified) {
+    }
+
+    /** Un cod trimis pe email, din bază (doar amprenta lui). */
+    record StoredCode(String codeHash, java.time.OffsetDateTime expiresAt, int attempts) {
     }
 }

@@ -99,8 +99,10 @@ O capsulă e un loc + o dată, cu **cel mult 10 urme** înăuntru (fiecare: text
   sigilează și singură după 7 zile, la 10 urme sau la data deschiderii. Până la deschidere se vede doar câte urme are.
 - **Personală** (doar cu cont): o umple și o deschide doar contul ei.
 - **Deschiderea**: doar în locul ei (15 m) și după dată (minim mâine, maxim 10 ani, la miezul nopții, ora României),
-  verificat pe server; urmele pleacă spre telefon abia atunci. Nu expiră: după dată capsula așteaptă (în aplicație,
-  lumina devine aurie). După deschidere, pentru acel telefon / cont urmele devin urme obișnuite.
+  verificat pe server; urmele pleacă spre telefon abia atunci. **După dată se mai poate deschide două săptămâni**
+  (în aplicație, lumina devine aurie); apoi dispare pentru totdeauna pentru cine n-a deschis-o. **După deschidere**,
+  urmele din ea se văd o săptămână (de când a deschis-o fiecare) și încă o săptămână la un an de la deschidere;
+  apoi nu mai apar. Capsula anului se poate deschide tot două săptămâni (1–14 ianuarie).
 
 ```
 GET    /api/v1/capsules/nearby?lat=..&lng=..&radius=300   capsulele din jur (items doar după deschidere)
@@ -173,12 +175,18 @@ Pe hotspot serverul e HTTP simplu: parola trece necriptată prin rețeaua local�
 
 Fără cont aplicația merge ca înainte, cu id-ul anonim al telefonului. Cu cont (email + parolă; Google urmează):
 urmele lăsate cu contul deschis intră în cont și sunt „ale mele” de pe orice telefon, iar aplicația arată „Harta mea”.
-La înregistrare / autentificare, urmele lăsate fără cont de pe telefonul acela trec și ele în cont.
+La înregistrare / autentificare, urmele lăsate fără cont de pe telefonul acela trec și ele în cont. O urmă (sau capsulă)
+lăsată cu un cont e doar a acelui cont: alt cont deschis pe același telefon n-o vede ca fiind a lui și, la ștergerea
+lui, n-o șterge (`Viewer.owns` / `Viewer.owned`). Tot așa, o capsulă deschisă dintr-un cont e deschisă doar pentru el.
 
 | Metodă | Cale | Ce face |
 |---|---|---|
-| POST | `/api/v1/account/register` (`{"firstName", "lastName", "email", "password"}`) | cont nou; 201 `{"token", "account"}` (409 dacă emailul e folosit, 400 la parolă slabă) |
-| POST | `/api/v1/account/login` (`{"email", "password"}`) | `{"token", "account"}`; 401 la parolă greșită, 429 după 10 greșeli în 15 min |
+| POST | `/api/v1/account/register` (`{"firstName", "lastName", "email", "password"}`) | cont nou, încă neactiv: trimite un cod pe email; 201 `{"verificationRequired": true, "email"}` (409 dacă emailul are deja un cont activ, 400 la parolă slabă) |
+| POST | `/api/v1/account/verify` (`{"email", "code"}`) | codul de 6 cifre activează contul: `{"token", "account"}` |
+| POST | `/api/v1/account/verify/resend` (`{"email"}`) | alt cod de verificare (429 dacă s-a cerut unul acum mai puțin de un minut) |
+| POST | `/api/v1/account/login` (`{"email", "password"}`) | `{"token", "account"}`; dacă emailul nu e verificat, trimite codul și răspunde `{"verificationRequired": true}`; 401 la parolă greșită, 429 după 10 greșeli în 15 min |
+| POST | `/api/v1/account/password/forgot` (`{"email"}`) | „Mi-am uitat parola”: cod pe email; 204 și dacă emailul n-are cont (nu se poate afla cine are cont) |
+| POST | `/api/v1/account/password/reset` (`{"email", "code", "password"}`) | parola nouă; închide sesiunile vechi și deschide contul: `{"token", "account"}` |
 | GET | `/api/v1/account` | contul: `firstName, lastName, email, createdAt, traceCount, hasPassword, hasGoogle` |
 | GET | `/api/v1/account/traces` | urmele contului (max 500, cele mai noi primele): `{"traces": [...]}` |
 | POST | `/api/v1/account/logout` | închide sesiunea |
@@ -188,6 +196,24 @@ Tokenul primit se trimite la orice cerere ca `Authorization: Bearer <token>` (ș
 expirat sau necunoscut e ignorat la urme și dă 401 la `/api/v1/account`. Parola se păstrează doar ca bcrypt; la
 înregistrare, parola slabă e refuzată (aceleași reguli ca indicatorul din aplicație: `account/PasswordStrength.java`). În bază, tokenul stă doar ca SHA-256; sesiunea ține un an sau până la deconectare.
 
+### Codurile pe email
+
+Un cont nou cu email + parolă se poate folosi doar după ce omul scrie codul de 6 cifre primit pe email (dovada că
+adresa există și e a lui). Tot cu un cod se alege o parolă nouă. Un cod ține 15 minute, are 5 încercări și se poate
+cere altul după un minut; în bază stă doar amprenta lui (`email_code`, migrarea V9). Conturile făcute înainte de V9
+rămân active.
+
+Emailurile pleacă de pe Gmail-ul aplicației. În `backend/.env` (nu intră în repo):
+
+```
+MAIL_USERNAME=adresa-aplicatiei@gmail.com
+MAIL_PASSWORD=parola-de-aplicatie-de-16-litere
+```
+
+„Parola de aplicație” se face din contul Google al acelui Gmail: Securitate → Verificare în doi pași (trebuie
+pornită) → Parole pentru aplicații. Fără `MAIL_USERNAME` / `MAIL_PASSWORD`, codul nu se trimite, ci apare în log:
+`docker compose logs api | grep Codul`.
+
 Încercare:
 
 ```
@@ -196,6 +222,19 @@ curl -X POST http://localhost:8080/api/v1/account/register -H "Content-Type: app
   -d '{"firstName":"Ana","lastName":"Pop","email":"test@exemplu.ro","password":"Ceai-cu-lamaie7"}'
 curl http://localhost:8080/api/v1/account -H "Authorization: Bearer <token-ul primit>"
 ```
+
+## Notificările
+
+Când adminul șterge o urmă, alege motivul (pagina îl propune pe cel raportat cel mai des), iar cine a lăsat-o
+primește o notificare în aplicație (Meniu → Notificări, cu bulină roșie pentru cele necitite). Notificarea e a
+contului sau, pentru urmele lăsate fără cont, a telefonului; la autentificare trece în cont (migrarea V11).
+
+| Metodă | Cale | Ce face |
+|---|---|---|
+| GET | `/api/v1/notifications` | `{"notifications": [{id, kind, title, body, createdAt, read}], "unread"}`, cele mai noi primele (max 50) |
+| POST | `/api/v1/notifications/{id}/read` | citită |
+| POST | `/api/v1/notifications/read-all` | toate citite |
+| DELETE | `/api/v1/admin/{traces\|capsules}/{id}?reason=…` | (admin) șterge și trimite notificarea cu motivul |
 
 ## Baza de date
 

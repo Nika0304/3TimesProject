@@ -60,14 +60,20 @@ public final class CapsuleDtos {
             int itemCount,
             int myItems,
             int maxItems,
+            String openedAt,           // când am deschis-o eu (ISO 8601), sau null
             List<TraceView> items      // gol cât e sigilată pentru mine
     ) {
         CapsuleView withItems(List<TraceView> list) {
             return new CapsuleView(id, kind, latitude, longitude, altitude, heightAboveTerrain, accuracyMeters,
                     yawAccuracyDegrees, createdAt, mine, distanceMeters, visibility, unlockAt, ready, opened, sealed,
-                    collecting, itemCount, myItems, maxItems, list);
+                    collecting, itemCount, myItems, maxItems, openedAt, list);
         }
     }
+
+    /** După dată, capsula se mai poate deschide atâtea zile; apoi dispare pentru cine n-a deschis-o. */
+    public static final int OPEN_WINDOW_DAYS = 14;
+    /** După deschidere, urmele din ea se văd atâtea zile (și la fiecare aniversare a deschiderii, tot atâtea). */
+    public static final int ITEMS_VISIBLE_DAYS = 7;
 
     public record NearbyResponse(List<CapsuleView> capsules) {
     }

@@ -16,7 +16,10 @@ import org.springframework.web.bind.annotation.RestController;
 import com.threetimes.backend.account.AccountDtos.AccountView;
 import com.threetimes.backend.account.AccountDtos.AuthResponse;
 import com.threetimes.backend.account.AccountDtos.Credentials;
+import com.threetimes.backend.account.AccountDtos.EmailRequest;
 import com.threetimes.backend.account.AccountDtos.RegisterRequest;
+import com.threetimes.backend.account.AccountDtos.ResetRequest;
+import com.threetimes.backend.account.AccountDtos.VerifyRequest;
 import com.threetimes.backend.common.DeviceIds;
 import com.threetimes.backend.common.Viewer;
 import com.threetimes.backend.trace.TraceDtos.MyTracesResponse;
@@ -25,8 +28,13 @@ import com.threetimes.backend.trace.TraceService;
 /**
  * Conturile (opționale):
  * <pre>
- * POST   /api/v1/account/register  {"firstName", "lastName", "email", "password"}   → 201 {"token", "account"}
- * POST   /api/v1/account/login     {"email", "password"}   → {"token", "account"}
+ * POST   /api/v1/account/register  {"firstName", "lastName", "email", "password"}
+ *                                   → 201 {"verificationRequired": true, "email"} (codul pleacă pe email)
+ * POST   /api/v1/account/verify    {"email", "code"}       → {"token", "account"} (contul e activ)
+ * POST   /api/v1/account/verify/resend {"email"}           → 204, alt cod (după cel puțin un minut)
+ * POST   /api/v1/account/login     {"email", "password"}   → {"token", "account"}, sau {"verificationRequired": true}
+ * POST   /api/v1/account/password/forgot {"email"}         → 204, cod pe email dacă emailul are cont
+ * POST   /api/v1/account/password/reset  {"email", "code", "password"} → {"token", "account"}
  * GET    /api/v1/account                                    → contul (email, câte urme are…)
  * GET    /api/v1/account/traces                             → urmele contului, pentru „Harta mea”
  * POST   /api/v1/account/logout                             → 204
@@ -53,6 +61,30 @@ public class AccountController {
     public ResponseEntity<AuthResponse> register(@RequestBody(required = false) RegisterRequest body,
                                                  @RequestHeader(value = DeviceIds.HEADER, required = false) String device) {
         return ResponseEntity.status(HttpStatus.CREATED).body(accounts.register(body, devices.optional(device)));
+    }
+
+    @PostMapping("/verify")
+    public AuthResponse verify(@RequestBody(required = false) VerifyRequest body,
+                               @RequestHeader(value = DeviceIds.HEADER, required = false) String device) {
+        return accounts.verify(body, devices.optional(device));
+    }
+
+    @PostMapping("/verify/resend")
+    public ResponseEntity<Void> resend(@RequestBody(required = false) EmailRequest body) {
+        accounts.resendVerification(body);
+        return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/password/forgot")
+    public ResponseEntity<Void> forgot(@RequestBody(required = false) EmailRequest body) {
+        accounts.forgotPassword(body);
+        return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/password/reset")
+    public AuthResponse reset(@RequestBody(required = false) ResetRequest body,
+                              @RequestHeader(value = DeviceIds.HEADER, required = false) String device) {
+        return accounts.resetPassword(body, devices.optional(device));
     }
 
     @PostMapping("/login")

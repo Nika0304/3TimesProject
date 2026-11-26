@@ -23,6 +23,9 @@ namespace ThreeTimes.Data
         public static string Name => PlayerPrefs.GetString(NameKey, "");
         public static bool IsSignedIn => Token.Length > 0;
 
+        /// <summary>Emailul contului închis ultima dată (după deconectare / ștergere), pentru curățenia de pe telefon.</summary>
+        public static string PreviousEmail { get; private set; } = "";
+
         public static void Set(string token, string email, string name)
         {
             PlayerPrefs.SetString(TokenKey, token ?? "");
@@ -44,6 +47,7 @@ namespace ThreeTimes.Data
         public static void Clear()
         {
             bool was = IsSignedIn;
+            if (was) PreviousEmail = Email;
             PlayerPrefs.DeleteKey(TokenKey);
             PlayerPrefs.DeleteKey(EmailKey);
             PlayerPrefs.DeleteKey(NameKey);

@@ -71,6 +71,7 @@ namespace ThreeTimes.UI
             overlays.Add(Root.Q("screen-about"));
             overlays.Add(Root.Q("screen-account"));
             overlays.Add(Root.Q("screen-log"));
+            overlays.Add(Root.Q("screen-notifications"));
 
             checkingStatus = Root.Q<Label>("checking-status");
             localizingAccuracy = Root.Q<Label>("localizing-accuracy");

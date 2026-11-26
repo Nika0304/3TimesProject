@@ -8,6 +8,8 @@ namespace ThreeTimes.Data
     /// <summary>
     /// Cărțile poștale făcute în aplicație (persistentDataPath/postcards/*.jpg), de revăzut din Meniu.
     /// Dacă o carte a fost salvată și în galerie, ținem minte adresa ei de acolo (pentru „Trimite”).
+    /// Fiecare carte ține minte contul deschis când a fost făcută (gol = fără cont) și se vede doar cu el deschis.
+    /// Cărțile de dinainte de 27 nov n-au cont: se văd fără cont.
     /// </summary>
     public static class PostcardStore
     {
@@ -27,6 +29,8 @@ namespace ThreeTimes.Data
             {
                 string name = $"3times-{DateTime.Now:yyyyMMdd-HHmmss}.jpg";
                 File.WriteAllBytes(Path.Combine(Folder, name), jpeg);
+                PlayerPrefs.SetString(OwnerKey(name), TraceStore.CurrentOwner);
+                PlayerPrefs.Save();
                 return name;
             }
             catch (Exception e)
@@ -36,13 +40,22 @@ namespace ThreeTimes.Data
             }
         }
 
-        /// <summary>Numele cărților, de la cea mai nouă.</summary>
+        static string OwnerKey(string name) => "postcard-owner-" + name;
+
+        static string OwnerOf(string name) => PlayerPrefs.GetString(OwnerKey(name), "");
+
+        /// <summary>Numele cărților contului deschis acum (sau, fără cont, ale celor făcute fără cont), de la cea mai nouă.</summary>
         public static List<string> All()
         {
             var names = new List<string>();
+            string me = TraceStore.CurrentOwner;
             try
             {
-                foreach (var path in Directory.GetFiles(Folder, "*.jpg")) names.Add(Path.GetFileName(path));
+                foreach (var path in Directory.GetFiles(Folder, "*.jpg"))
+                {
+                    string name = Path.GetFileName(path);
+                    if (OwnerOf(name) == me) names.Add(name);
+                }
             }
             catch (Exception e)
             {
@@ -76,11 +89,35 @@ namespace ThreeTimes.Data
                 string path = Path.Combine(Folder, name);
                 if (File.Exists(path)) File.Delete(path);
                 PlayerPrefs.DeleteKey("postcard-uri-" + name);
+                PlayerPrefs.DeleteKey(OwnerKey(name));
             }
             catch (Exception e)
             {
                 Debug.LogWarning($"[3Times] Nu am putut șterge cartea poștală: {e.Message}");
             }
+        }
+
+        /// <summary>Șterge cărțile unui cont (după ștergerea contului). Cele salvate și în galerie rămân acolo.</summary>
+        public static int DeleteOwner(string owner)
+        {
+            if (string.IsNullOrEmpty(owner)) return 0;
+            string key = owner.Trim().ToLowerInvariant();
+            int count = 0;
+            try
+            {
+                foreach (var path in Directory.GetFiles(Folder, "*.jpg"))
+                {
+                    string name = Path.GetFileName(path);
+                    if (OwnerOf(name) != key) continue;
+                    Delete(name);
+                    count++;
+                }
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning($"[3Times] Nu am putut șterge cărțile poștale ale contului: {e.Message}");
+            }
+            return count;
         }
 
         public static string GalleryUri(string name) => PlayerPrefs.GetString("postcard-uri-" + name, "");

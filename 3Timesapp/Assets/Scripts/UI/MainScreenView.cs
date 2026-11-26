@@ -43,7 +43,7 @@ namespace ThreeTimes.UI
         public event Action ClearTracesRequested;
         /// <summary>Atingere în zona liberă a ecranului, în coordonate de ecran (pentru urmele din AR).</summary>
         public event Action<Vector2> WorldTapped;
-        public event Action<ThreeTimes.Data.SavedTrace> TraceReportRequested;
+        public event Action<ThreeTimes.Data.SavedTrace, string> TraceReportRequested;
         public event Action<ThreeTimes.Data.SavedTrace> TraceDeleteRequested;
         /// <summary>Contul a fost șters împreună cu urmele lui (TraceManager le scoate și de pe telefon).</summary>
         public event Action AccountDeleted;
@@ -80,6 +80,7 @@ namespace ThreeTimes.UI
         Label serverStatus;
 
         VisualElement screenLog;
+        NotificationsView notifications;
         Label logText;
         VisualElement screenMain, screenMenu, screenAbout, pastTint, cameraPrompt, simTraces;
         Button cameraOff;
@@ -171,6 +172,7 @@ namespace ThreeTimes.UI
             account.AccountDeleted += () => AccountDeleted?.Invoke();
             root.Q<Button>("menu-account").clicked += () => account.Open();
             root.Q<Button>("menu-about").clicked += OpenAbout;
+            notifications = new NotificationsView(root, router, this);
 
             // Serverul: adresa se poate schimba (la hotspot, IP-ul laptopului)
             serverField = root.Q<TextField>("server-url");
@@ -226,7 +228,7 @@ namespace ThreeTimes.UI
 
             voicePlayer = new ThreeTimes.Media.VoicePlayer(gameObject);
             traceDetail = new TraceDetailView(root, router, voicePlayer);
-            traceDetail.ReportRequested += t => TraceReportRequested?.Invoke(t);
+            traceDetail.ReportRequested += (t, reason) => TraceReportRequested?.Invoke(t, reason);
             traceDetail.DeleteRequested += t => TraceDeleteRequested?.Invoke(t);
 
             // Atingerile din zona liberă: le trimitem mai departe în coordonate de ecran (origine jos-stânga).
@@ -308,6 +310,7 @@ namespace ThreeTimes.UI
             else if (traceSheet.IsOpen) { if (!traceSheet.HandleBack()) traceSheet.Close(); }
             else if (IsVisible(screenLog)) UIRouter.SetVisible(screenLog, false);
             else if (account.IsOpen) account.Back();
+            else if (notifications.IsOpen) notifications.Close();
             else if (IsVisible(screenAbout)) CloseAbout();
             else if (IsVisible(screenMenu)) CloseMenu();
             else if (Mode != TimeMode.Present) Select(TimeMode.Present);
@@ -478,7 +481,9 @@ namespace ThreeTimes.UI
             orb.style.backgroundImage = new StyleBackground(CapsuleIcon.Get(ready));
             item.Add(orb);
 
-            string text = ready ? (t.IsYearCapsule ? $"Capsula anului {t.year}: atinge ca s-o deschizi" : "Atinge ca s-o deschizi")
+            int daysLeft = TraceTime.CapsuleDaysLeft(t);
+            string left = daysLeft <= 0 ? "" : daysLeft == 1 ? " · ultima zi" : $" · încă {daysLeft} zile";
+            string text = ready ? (t.IsYearCapsule ? $"Capsula anului {t.year}: atinge ca s-o deschizi{left}" : $"Atinge ca s-o deschizi{left}")
                         : t.IsYearCapsule ? $"Capsula anului {t.year} · {t.itemCount} urme"
                         : t.collecting ? $"{t.itemCount} din {(t.maxItems > 0 ? t.maxItems : 10)} urme"
                         : CapsuleText.Short(t);
@@ -566,6 +571,7 @@ namespace ThreeTimes.UI
             serverField.value = ThreeTimes.Data.ServerSettings.Url;
             serverStatus.text = "";
             UIRouter.SetVisible(screenMenu, true);
+            notifications.Refresh();
         }
         void CloseMenu() => UIRouter.SetVisible(screenMenu, false);
         void OpenAbout() => UIRouter.SetVisible(screenAbout, true);

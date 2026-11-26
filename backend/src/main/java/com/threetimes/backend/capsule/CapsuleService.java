@@ -180,6 +180,8 @@ public class CapsuleService {
         Instant unlock = Instant.parse(capsule.view().unlockAt());
         if (TestClock.now().isBefore(unlock))
             throw ApiException.forbidden("Capsula se deschide " + whenText(unlock) + ".");
+        if (!TestClock.now().isBefore(unlock.plus(Duration.ofDays(CapsuleDtos.OPEN_WINDOW_DAYS))))
+            throw ApiException.forbidden("Capsula nu mai poate fi deschisă: au trecut cele două săptămâni de după data ei.");
 
         if (at == null || at.latitude() == null || at.longitude() == null)
             throw ApiException.badRequest("Lipsește poziția telefonului.");

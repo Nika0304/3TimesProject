@@ -32,8 +32,11 @@ public class CapsuleRepository {
 
     /** „A mea”, pentru tabelul cu alias-ul dat (c = capsula, i = urma din capsulă), cu parametrii :device și :user. */
     private static String mine(String alias) {
-        return "(%1$s.owner_hash = :device OR (CAST(:user AS uuid) IS NOT NULL AND %1$s.user_id = :user))".formatted(alias);
+        return Viewer.owned(alias + ".user_id", alias + ".owner_hash", "device", "user");
     }
+
+    /** Am deschis-o eu: din contul meu, sau fără cont de pe telefonul acesta. */
+    private static final String OPENED_BY_ME = Viewer.owned("o.user_id", "o.device_hash", "device", "user");
 
     private static final String COLUMNS = """
             c.id, ST_Y(c.location::geometry) AS lat, ST_X(c.location::geometry) AS lng,
@@ -41,13 +44,13 @@ public class CapsuleRepository {
             c.visibility, c.unlock_at, c.created_at, c.owner_hash, c.user_id,
             CAST(:now AS timestamptz) >= c.unlock_at AS ready,
             (SELECT count(*) FROM capsule_item i WHERE i.capsule_id = c.id) AS item_count,
-            (SELECT count(*) FROM capsule_item i WHERE i.capsule_id = c.id AND %s) AS my_items,
-            EXISTS (SELECT 1 FROM capsule_open o WHERE o.capsule_id = c.id
-                    AND (o.device_hash = :device OR (CAST(:user AS uuid) IS NOT NULL AND o.user_id = :user))) AS opened,
+            (SELECT count(*) FROM capsule_item i WHERE i.capsule_id = c.id AND %1$s) AS my_items,
+            EXISTS (SELECT 1 FROM capsule_open o WHERE o.capsule_id = c.id AND %2$s) AS opened,
+            (SELECT min(o.opened_at) FROM capsule_open o WHERE o.capsule_id = c.id AND %2$s) AS opened_at,
             (c.sealed_at IS NULL AND CAST(:now AS timestamptz) < c.created_at + INTERVAL '7 days'
              AND CAST(:now AS timestamptz) < c.unlock_at
-             AND (SELECT count(*) FROM capsule_item i WHERE i.capsule_id = c.id) < %d) AS collecting
-            """.formatted(mine("i"), CapsuleDtos.MAX_ITEMS);
+             AND (SELECT count(*) FROM capsule_item i WHERE i.capsule_id = c.id) < %3$d) AS collecting
+            """.formatted(mine("i"), OPENED_BY_ME, CapsuleDtos.MAX_ITEMS);
 
     private static final String ITEM_COLUMNS = """
             i.id, i.type, i.content, i.emotion, i.shape, i.color, i.accent_color, i.petals, i.sharpness, i.motion,
@@ -56,6 +59,20 @@ public class CapsuleRepository {
             EXISTS (SELECT 1 FROM capsule_item_media m WHERE m.item_id = i.id) AS has_media,
             EXISTS (SELECT 1 FROM capsule_item_report r WHERE r.item_id = i.id AND r.reporter_hash = :device) AS reported
             """;
+
+    /**
+     * Acum e în primele `days` zile ale aniversării de 1 an a momentului dat (ora României, din ziua aniversării).
+     * Urmele dintr-o capsulă deschisă revin o singură dată, la un an de la deschidere (decis 26 nov).
+     */
+    static String anniversary(String moment, int days) {
+        return """
+                EXISTS (SELECT 1 FROM generate_series(1, 1) AS k
+                        WHERE CAST(:now AS timestamptz) >= (date_trunc('day', %1$s AT TIME ZONE 'Europe/Bucharest')
+                                      + make_interval(years => k)) AT TIME ZONE 'Europe/Bucharest'
+                          AND CAST(:now AS timestamptz) < (date_trunc('day', %1$s AT TIME ZONE 'Europe/Bucharest')
+                                      + make_interval(years => k) + make_interval(days => %2$d)) AT TIME ZONE 'Europe/Bucharest')
+                """.formatted(moment, days);
+    }
 
     private final NamedParameterJdbcTemplate jdbc;
 
@@ -145,11 +162,13 @@ public class CapsuleRepository {
     }
 
     public void recordOpen(UUID id, Viewer me) {
+        // O deschidere pe cont (sau, fără cont, pe telefon); prima rămâne (opened_at = prima deschidere).
         jdbc.update("""
                 INSERT INTO capsule_open (capsule_id, device_hash, user_id)
-                VALUES (:id, :device, :user)
-                ON CONFLICT (capsule_id, device_hash) DO UPDATE SET user_id = COALESCE(capsule_open.user_id, EXCLUDED.user_id)
-                """, who(me).addValue("id", id));
+                SELECT :id, :device, CAST(:user AS uuid)
+                WHERE NOT EXISTS (SELECT 1 FROM capsule_open o WHERE o.capsule_id = :id AND %s)
+                ON CONFLICT DO NOTHING
+                """.formatted(OPENED_BY_ME), who(me).addValue("id", id));
     }
 
     public boolean reportItem(UUID itemId, String reporterHash, String reason, int reportsToHide) {
@@ -202,16 +221,25 @@ public class CapsuleRepository {
                 .addValue("lng", lng)
                 .addValue("radius", radiusMeters)
                 .addValue("limit", limit);
+        // Ce se vede: capsula nedeschisă, până la două săptămâni după dată (apoi dispare pentru cine n-a deschis-o);
+        // capsula deschisă de mine (= urmele ei), o săptămână de la deschidere și apoi la fiecare aniversare a ei.
         List<CapsuleView> views = jdbc.query("""
-                SELECT %s,
-                       ST_Distance(c.location, ST_SetSRID(ST_MakePoint(:lng, :lat), 4326)::geography) AS distance
-                FROM capsule c
-                WHERE ST_DWithin(c.location, ST_SetSRID(ST_MakePoint(:lng, :lat), 4326)::geography, :radius)
-                  AND (c.visibility = 'PUBLIC' OR %s)
-                  AND EXISTS (SELECT 1 FROM capsule_item i WHERE i.capsule_id = c.id)
-                ORDER BY distance
+                SELECT * FROM (
+                    SELECT %s,
+                           ST_Distance(c.location, ST_SetSRID(ST_MakePoint(:lng, :lat), 4326)::geography) AS distance
+                    FROM capsule c
+                    WHERE ST_DWithin(c.location, ST_SetSRID(ST_MakePoint(:lng, :lat), 4326)::geography, :radius)
+                      AND (c.visibility = 'PUBLIC' OR %s)
+                      AND EXISTS (SELECT 1 FROM capsule_item i WHERE i.capsule_id = c.id)
+                ) q
+                WHERE (NOT q.opened AND CAST(:now AS timestamptz) < q.unlock_at + make_interval(days => %d))
+                   OR (q.opened AND (CAST(:now AS timestamptz) < q.opened_at + make_interval(days => %d)
+                                     OR %s))
+                ORDER BY q.distance
                 LIMIT :limit
-                """.formatted(COLUMNS, mine("c")), p, (rs, n) -> map(rs, me).view());
+                """.formatted(COLUMNS, mine("c"), CapsuleDtos.OPEN_WINDOW_DAYS, CapsuleDtos.ITEMS_VISIBLE_DAYS,
+                              anniversary("q.opened_at", CapsuleDtos.ITEMS_VISIBLE_DAYS)),
+                p, (rs, n) -> map(rs, me).view());
         return views.stream().map(v -> withItems(v, me)).toList();
     }
 
@@ -260,6 +288,7 @@ public class CapsuleRepository {
         String owner = rs.getString("owner_hash");
         UUID user = rs.getObject("user_id", UUID.class);
         boolean opened = rs.getBoolean("opened");
+        OffsetDateTime openedAt = rs.getObject("opened_at", OffsetDateTime.class);
         var view = new CapsuleView(
                 rs.getObject("id", UUID.class).toString(),
                 "CAPSULE",
@@ -281,6 +310,7 @@ public class CapsuleRepository {
                 rs.getInt("item_count"),
                 rs.getInt("my_items"),
                 CapsuleDtos.MAX_ITEMS,
+                openedAt == null ? null : iso(openedAt),
                 List.of());
         return new Stored(view, owner, user);
     }

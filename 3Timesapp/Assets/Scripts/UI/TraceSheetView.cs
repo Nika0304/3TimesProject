@@ -285,7 +285,9 @@ namespace ThreeTimes.UI
                 draft.Capsule = true;
                 draft.CapsuleId = addingTo;
                 draft.Visibility = personal ? "PERSONAL" : "PUBLIC";
-                draft.UnlockAt = RomaniaTime.Iso(testMinute ? TestClock.UtcNow.AddSeconds(150) : RomaniaTime.MidnightUtc(unlockDate));
+                // Data contează doar la o capsulă nouă; la una existentă (addingTo) o știe serverul.
+                if (addingTo == null)
+                    draft.UnlockAt = RomaniaTime.Iso(testMinute ? TestClock.UtcNow.AddSeconds(150) : RomaniaTime.MidnightUtc(unlockDate));
             }
             switch (kind)
             {

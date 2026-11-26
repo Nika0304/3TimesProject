@@ -12,6 +12,8 @@ namespace ThreeTimes.UI
     /// Fără cont, două file: „Intră în cont” (email, parolă) și „Cont nou” (prenume, nume, email, parolă cu indicatorul
     /// slabă / medie / puternică; parola slabă nu se acceptă), plus „Continuă fără cont”.
     /// Cu cont: numele, emailul, câte urme are, „Deconectează-te” și „Șterge contul și urmele mele” (cu confirmare).
+    /// Contul nou se activează cu un cod de 6 cifre trimis pe email; „Mi-am uitat parola” trimite tot un cod, cu care
+    /// se alege o parolă nouă (panoul „account-code”).
     /// </summary>
     public class AccountView
     {
@@ -23,6 +25,15 @@ namespace ThreeTimes.UI
         readonly Label title, intro, serverNote, error, currentEmail, meta, deleteError, menuLabel, strengthLabel;
         readonly TextField firstNameField, lastNameField, emailField, passwordField;
         readonly Button tabLogin, tabRegister, submit, skip, logout, delete, deleteCancel, deleteConfirm;
+
+        // Codul primit pe email
+        enum CodeMode { None, Verify, Reset }
+        readonly VisualElement codePanel, newPasswordBox;
+        readonly Label codeTitle, codeIntro, codeError, newStrength;
+        readonly TextField codeField, newPasswordField;
+        readonly Button forgot, codeSubmit, codeResend, codeCancel;
+        CodeMode codeMode;
+        string codeEmail = "";
 
         bool registerMode;
         bool busy;
@@ -65,6 +76,18 @@ namespace ThreeTimes.UI
             delete = root.Q<Button>("account-delete");
             deleteCancel = root.Q<Button>("account-delete-cancel");
             deleteConfirm = root.Q<Button>("account-delete-confirm");
+            codePanel = root.Q("account-code");
+            newPasswordBox = root.Q("account-new-password-box");
+            codeTitle = root.Q<Label>("account-code-title");
+            codeIntro = root.Q<Label>("account-code-intro");
+            codeError = root.Q<Label>("account-code-error");
+            newStrength = root.Q<Label>("account-new-strength");
+            codeField = root.Q<TextField>("account-code-field");
+            newPasswordField = root.Q<TextField>("account-new-password");
+            forgot = root.Q<Button>("account-forgot");
+            codeSubmit = root.Q<Button>("account-code-submit");
+            codeResend = root.Q<Button>("account-code-resend");
+            codeCancel = root.Q<Button>("account-code-cancel");
 
             firstNameField.maxLength = 50;
             lastNameField.maxLength = 50;
@@ -77,6 +100,12 @@ namespace ThreeTimes.UI
             emailField.RegisterValueChangedCallback(_ => UpdateStrength());
             firstNameField.RegisterValueChangedCallback(_ => UpdateStrength());
             lastNameField.RegisterValueChangedCallback(_ => UpdateStrength());
+            codeField.keyboardType = TouchScreenKeyboardType.NumberPad;
+            codeField.maxLength = 7;
+            newPasswordField.isPasswordField = true;
+            newPasswordField.maskChar = '•';
+            newPasswordField.maxLength = 72;
+            newPasswordField.RegisterValueChangedCallback(_ => UpdateNewStrength());
 
             root.Q<Button>("account-back").clicked += Close;
             skip.clicked += Close;
@@ -92,6 +121,10 @@ namespace ThreeTimes.UI
             };
             deleteCancel.clicked += HideConfirm;
             deleteConfirm.clicked += DeleteAccount;
+            forgot.clicked += ForgotPassword;
+            codeSubmit.clicked += SubmitCode;
+            codeResend.clicked += ResendCode;
+            codeCancel.clicked += LeaveCode;
 
             AccountSession.Changed += UpdateMenuLabel;
             UpdateMenuLabel();
@@ -112,6 +145,7 @@ namespace ThreeTimes.UI
             if (!IsOpen) return;
             BlurAll();
             passwordField.value = "";
+            newPasswordField.value = "";
             UIRouter.SetVisible(screen, false);
         }
 
@@ -119,13 +153,17 @@ namespace ThreeTimes.UI
         public void Back()
         {
             if (IsVisible(confirm)) HideConfirm();
+            else if (codeMode != CodeMode.None) LeaveCode();
             else Close();
         }
 
         void ShowState()
         {
             bool inAccount = AccountSession.IsSignedIn;
-            UIRouter.SetVisible(signedOut, !inAccount);
+            if (inAccount) codeMode = CodeMode.None;
+            bool coding = codeMode != CodeMode.None;
+            UIRouter.SetVisible(signedOut, !inAccount && !coding);
+            UIRouter.SetVisible(codePanel, coding);
             UIRouter.SetVisible(signedIn, inAccount);
             HideConfirm();
             UIRouter.SetVisible(error, false);
@@ -157,6 +195,7 @@ namespace ThreeTimes.UI
                 ? "Contul e opțional. Cu el îți vezi pe hartă locurile unde ai lăsat urme, de pe orice telefon."
                 : "Intră cu emailul și parola contului tău.";
             UIRouter.SetVisible(names, register);
+            UIRouter.SetVisible(forgot, !register);
             UIRouter.SetVisible(strength, register && !string.IsNullOrEmpty(passwordField.value));
             submit.text = register ? "Creează contul" : "Intră în cont";
             UIRouter.SetVisible(error, false);
@@ -233,9 +272,16 @@ namespace ThreeTimes.UI
             BlurAll();
             bool register = registerMode;
             SetBusy(true, register ? "Se creează contul…" : "Se verifică…");
-            Action<AccountInfo, string> done = (info, message) =>
+            Action<AccountInfo, string, bool> done = (info, message, needsCode) =>
             {
                 SetBusy(false, null);
+                if (needsCode)
+                {
+                    passwordField.value = "";
+                    ShowCode(CodeMode.Verify, email);
+                    TestLog.Add(register ? "Cont creat, aștept codul din email" : "Cont neverificat, cod trimis");
+                    return;
+                }
                 if (info == null)
                 {
                     ShowError(message);
@@ -251,6 +297,153 @@ namespace ThreeTimes.UI
             host.StartCoroutine(register
                 ? AccountApi.Register(first, last, email, password, done)
                 : AccountApi.Login(email, password, done));
+        }
+
+        // ---------------------------------------------------------------- codul primit pe email
+
+        void ForgotPassword()
+        {
+            if (busy) return;
+            if (!ServerSettings.IsConfigured)
+            {
+                ShowError("Contul are nevoie de server: pune adresa lui în Meniu, la „Server”.");
+                return;
+            }
+            string email = (emailField.value ?? "").Trim();
+            if (email.Length == 0 || !email.Contains("@") || !email.Contains("."))
+            {
+                ShowError("Scrie mai sus emailul contului, apoi apasă din nou „Mi-am uitat parola”.");
+                return;
+            }
+            BlurAll();
+            SetBusy(true, null);
+            forgot.text = "Se trimite…";
+            host.StartCoroutine(AccountApi.ForgotPassword(email, (ok, message) =>
+            {
+                SetBusy(false, null);
+                forgot.text = "Mi-am uitat parola";
+                if (!ok)
+                {
+                    ShowError(message);
+                    return;
+                }
+                passwordField.value = "";
+                ShowCode(CodeMode.Reset, email);
+                TestLog.Add("Cod pentru parola nouă cerut");
+            }));
+        }
+
+        void ShowCode(CodeMode mode, string email)
+        {
+            codeMode = mode;
+            codeEmail = email;
+            bool reset = mode == CodeMode.Reset;
+            codeTitle.text = reset ? "Alege o parolă nouă" : "Verifică-ți emailul";
+            codeIntro.text = reset
+                ? $"Dacă {email} are cont, am trimis acolo un cod de 6 cifre. Scrie-l aici, împreună cu parola nouă. " +
+                  "Nu-l vezi? Uită-te și în Spam."
+                : $"Am trimis un cod de 6 cifre pe {email}. Scrie-l aici ca să-ți activezi contul. " +
+                  "Nu-l vezi? Uită-te și în Spam.";
+            codeSubmit.text = reset ? "Schimbă parola" : "Activează contul";
+            codeField.value = "";
+            newPasswordField.value = "";
+            UIRouter.SetVisible(newPasswordBox, reset);
+            UIRouter.SetVisible(newStrength, false);
+            ShowCodeError(null);
+            ShowState();
+        }
+
+        void LeaveCode()
+        {
+            if (busy) return;
+            BlurAll();
+            codeMode = CodeMode.None;
+            ShowState();
+        }
+
+        void UpdateNewStrength()
+        {
+            var result = PasswordStrength.Evaluate(newPasswordField.value, codeEmail, "", "");
+            UIRouter.SetVisible(newStrength, result.Level != PasswordStrength.Level.Empty);
+            newStrength.text = result.Level == PasswordStrength.Level.Strong ? "Parolă puternică." :
+                               result.Level == PasswordStrength.Level.Medium ? $"Medie. {result.Hint}" : $"Slabă. {result.Hint}";
+            newStrength.EnableInClassList("strength__label--weak", result.Level == PasswordStrength.Level.Weak);
+        }
+
+        void SubmitCode()
+        {
+            if (busy || codeMode == CodeMode.None) return;
+            string code = "";
+            foreach (char c in codeField.value ?? "") if (char.IsDigit(c)) code += c;
+            if (code.Length != 6) { ShowCodeError("Scrie cele 6 cifre din email."); return; }
+
+            bool reset = codeMode == CodeMode.Reset;
+            string password = newPasswordField.value ?? "";
+            if (reset)
+            {
+                if (password.Length == 0) { ShowCodeError("Scrie parola nouă."); return; }
+                var result = PasswordStrength.Evaluate(password, codeEmail, "", "");
+                if (result.Level == PasswordStrength.Level.Weak)
+                {
+                    ShowCodeError("Parola e prea slabă. " + result.Hint);
+                    return;
+                }
+            }
+
+            BlurAll();
+            SetBusy(true, null);
+            codeSubmit.text = "Se verifică…";
+            Action<AccountInfo, string, bool> done = (info, message, _) =>
+            {
+                SetBusy(false, null);
+                codeSubmit.text = reset ? "Schimbă parola" : "Activează contul";
+                if (info == null)
+                {
+                    ShowCodeError(message ?? "Răspuns neașteptat de la server.");
+                    return;
+                }
+                codeMode = CodeMode.None;
+                codeField.value = "";
+                newPasswordField.value = "";
+                ShowState();
+                ShowAccount(info);
+                TestLog.Add(reset ? "Parolă schimbată" : "Email verificat, cont activ");
+                router.Toast(reset ? "Parola e schimbată. Ai intrat în cont."
+                                   : "Emailul e verificat. Contul e gata, iar urmele de pe telefonul acesta au trecut în cont.", 4f);
+            };
+            host.StartCoroutine(reset
+                ? AccountApi.ResetPassword(codeEmail, code, password, done)
+                : AccountApi.Verify(codeEmail, code, done));
+        }
+
+        void ResendCode()
+        {
+            if (busy || codeMode == CodeMode.None) return;
+            bool reset = codeMode == CodeMode.Reset;
+            SetBusy(true, null);
+            codeResend.text = "Se trimite…";
+            Action<bool, string> done = (ok, message) =>
+            {
+                SetBusy(false, null);
+                codeResend.text = "Trimite alt cod";
+                if (!ok)
+                {
+                    ShowCodeError(message);
+                    return;
+                }
+                ShowCodeError(null);
+                codeField.value = "";
+                router.Toast($"Am trimis un cod nou pe {codeEmail}.", 3f);
+            };
+            host.StartCoroutine(reset
+                ? AccountApi.ForgotPassword(codeEmail, done)
+                : AccountApi.ResendCode(codeEmail, done));
+        }
+
+        void ShowCodeError(string message)
+        {
+            codeError.text = message ?? "";
+            UIRouter.SetVisible(codeError, !string.IsNullOrEmpty(message));
         }
 
         void Refresh()
@@ -347,6 +540,10 @@ namespace ThreeTimes.UI
             logout.SetEnabled(!on);
             deleteConfirm.SetEnabled(!on);
             deleteCancel.SetEnabled(!on);
+            forgot.SetEnabled(!on);
+            codeSubmit.SetEnabled(!on);
+            codeResend.SetEnabled(!on);
+            codeCancel.SetEnabled(!on);
             if (on && label != null) submit.text = label;
             if (!on) submit.text = registerMode ? "Creează contul" : "Intră în cont";
         }
@@ -357,6 +554,8 @@ namespace ThreeTimes.UI
             lastNameField.Blur();
             emailField.Blur();
             passwordField.Blur();
+            codeField.Blur();
+            newPasswordField.Blur();
         }
 
         void HideConfirm()
