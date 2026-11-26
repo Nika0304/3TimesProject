@@ -872,16 +872,18 @@ namespace ThreeTimes.AR
                 done(mineNear);
                 return;
             }
-            mainView.StartCoroutine(TraceApi.Nearby(lat, lng, radius, 200, (list, error) =>
+            mainView.StartCoroutine(MapNearby(lat, lng, radius, mineNear, done));
+        }
+
+        /// <summary>Urmele din jur pentru hartă, plus capsulele încă nedeschise (și capsula anului).</summary>
+        IEnumerator MapNearby(double lat, double lng, float radius, List<SavedTrace> mineNear, Action<List<SavedTrace>> done)
+        {
+            var all = new List<SavedTrace>(mineNear);
+            var ids = new HashSet<string>();
+            foreach (var t in mineNear) ids.Add(t.id);
+            yield return TraceApi.Nearby(lat, lng, radius, 200, (list, error) =>
             {
-                if (list == null)
-                {
-                    done(mineNear);
-                    return;
-                }
-                var all = new List<SavedTrace>(mineNear);
-                var ids = new HashSet<string>();
-                foreach (var t in mineNear) ids.Add(t.id);
+                if (list == null) return;
                 foreach (var t in list)
                 {
                     t.id = TraceStore.NormalizeId(t.id);
@@ -889,8 +891,21 @@ namespace ThreeTimes.AR
                     // Dacă urma e deja cunoscută (din AR), folosim același obiect.
                     all.Add(remote.TryGetValue(t.id, out var known) ? known : t);
                 }
-                done(all);
-            }));
+            });
+            // Capsulele: doar cele care încă se pot deschide (cele deschise își arată urmele în Prezent).
+            yield return CapsuleApi.Nearby(lat, lng, radius, 100, (list, error) =>
+            {
+                if (list == null) return;
+                foreach (var c in list)
+                    if (!c.opened && !TraceTime.CapsuleExpired(c)) all.Add(c);
+            });
+            yield return CapsuleApi.YearNearby(lat, lng, radius, (list, error) =>
+            {
+                if (list == null) return;
+                foreach (var c in list)
+                    if (!c.opened && !TraceTime.CapsuleExpired(c)) all.Add(c);
+            });
+            done(all);
         }
 
         /// <summary>
@@ -918,7 +933,12 @@ namespace ThreeTimes.AR
                     if (local != null) result.Add(local);
                     else result.Add(remote.TryGetValue(t.id, out var known) ? known : t);
                 }
-                done(result, null);
+                // Și capsulele mele (create de mine sau cu urmele mele), oricare ar fi starea lor.
+                mainView.StartCoroutine(CapsuleApi.Mine((capsuleList, _) =>
+                {
+                    if (capsuleList != null) result.AddRange(capsuleList);
+                    done(result, null);
+                }));
             }));
         }
 

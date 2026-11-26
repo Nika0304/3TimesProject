@@ -243,6 +243,19 @@ public class CapsuleRepository {
         return views.stream().map(v -> withItems(v, me)).toList();
     }
 
+    /**
+     * „Harta mea”: capsulele create de mine sau în care am pus o urmă, oricare ar fi starea lor (fără urmele din ele).
+     */
+    public List<CapsuleView> mine(Viewer me) {
+        return jdbc.query("""
+                SELECT %s, 0.0 AS distance
+                FROM capsule c
+                WHERE %s OR EXISTS (SELECT 1 FROM capsule_item i WHERE i.capsule_id = c.id AND %s)
+                ORDER BY c.created_at DESC
+                LIMIT 200
+                """.formatted(COLUMNS, mine("c"), mine("i")), who(me), (rs, n) -> map(rs, me).view());
+    }
+
     /** Urmele capsulei, doar dacă am deschis-o (cele ascunse după raportări nu apar, în afară de ale mele). */
     private CapsuleView withItems(CapsuleView v, Viewer me) {
         if (!v.opened()) return v;

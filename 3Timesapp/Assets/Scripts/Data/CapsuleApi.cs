@@ -204,9 +204,15 @@ namespace ThreeTimes.Data
             catch (Exception) { return null; }
         }
 
-        public static IEnumerator Nearby(double lat, double lng, float radius, int limit, Action<List<SavedTrace>, string> done)
+        public static IEnumerator Nearby(double lat, double lng, float radius, int limit, Action<List<SavedTrace>, string> done) =>
+            GetList($"{Base}/nearby?lat={F(lat)}&lng={F(lng)}&radius={Mathf.RoundToInt(radius)}&limit={limit}", done);
+
+        /// <summary>Capsulele mele (create de mine sau cu urmele mele), pentru „Harta mea”.</summary>
+        public static IEnumerator Mine(Action<List<SavedTrace>, string> done) => GetList($"{Base}/mine", done);
+
+        static IEnumerator GetList(string url, Action<List<SavedTrace>, string> done)
         {
-            using var request = UnityWebRequest.Get($"{Base}/nearby?lat={F(lat)}&lng={F(lng)}&radius={Mathf.RoundToInt(radius)}&limit={limit}");
+            using var request = UnityWebRequest.Get(url);
             TraceApi.Prepare(request);
             yield return request.SendWebRequest();
             if (request.result != UnityWebRequest.Result.Success)

@@ -170,6 +170,12 @@ namespace ThreeTimes.UI
             root.Q<Button>("menu-close").clicked += CloseMenu;
             account = new AccountView(root, router, this);
             account.AccountDeleted += () => AccountDeleted?.Invoke();
+            // După conectare: înapoi în Prezent (nu în Meniu).
+            account.SignedIn += () =>
+            {
+                CloseMenu();
+                Select(TimeMode.Present);
+            };
             root.Q<Button>("menu-account").clicked += () => account.Open();
             root.Q<Button>("menu-about").clicked += OpenAbout;
             notifications = new NotificationsView(root, router, this);
@@ -372,7 +378,13 @@ namespace ThreeTimes.UI
             capsuleCard.Open(capsule, addItem, seal, delete, removeMyItems);
 
         /// <summary>Ecranul capsulei anului (înainte de deschidere sau rezumatul anului).</summary>
-        public void ShowYearCard(ThreeTimes.Data.SavedTrace yearCapsule) => capsuleCard.OpenYear(yearCapsule);
+        public void ShowYearCard(ThreeTimes.Data.SavedTrace yearCapsule) =>
+            capsuleCard.OpenYear(yearCapsule, () =>
+            {
+                // O urmă obișnuită (cu bifa capsulei anului, pusă implicit), în Prezent, unde ești.
+                Select(TimeMode.Present);
+                OnPrimaryAction();
+            });
 
         /// <summary>Foaia „Pune o urmă în capsulă”, pentru o capsulă care mai primește urme.</summary>
         public void OpenAddToCapsule(ThreeTimes.Data.SavedTrace capsule)

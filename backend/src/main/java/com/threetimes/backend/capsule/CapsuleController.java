@@ -39,6 +39,7 @@ import com.threetimes.backend.trace.TraceDtos;
  * API-ul capsulelor timpului (modul Viitor):
  * <pre>
  * GET    /api/v1/capsules/nearby?lat=..&lng=..&radius=300   capsulele din jur (urmele din ele doar după deschidere)
+ * GET    /api/v1/capsules/mine         capsulele mele (create de mine sau cu urmele mele), pentru „Harta mea”
  * POST   /api/v1/capsules              multipart: „capsule” = locul + visibility + unlockAt; „item” = prima urmă
  *                                      (JSON ca la urme); „media” = poza / vocea ei
  * POST   /api/v1/capsules/{id}/items   multipart: „item” + „media”   pune încă o urmă (de la cel mult 15 m)
@@ -83,6 +84,12 @@ public class CapsuleController {
                                  @RequestHeader(value = DeviceIds.HEADER, required = false) String device,
                                  @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String auth) {
         return new NearbyResponse(service.nearby(lat, lng, radius, limit, viewer(device, auth, false)));
+    }
+
+    @GetMapping("/mine")
+    public NearbyResponse mine(@RequestHeader(value = DeviceIds.HEADER, required = false) String device,
+                               @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String auth) {
+        return new NearbyResponse(service.mine(viewer(device, auth, true)));
     }
 
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)

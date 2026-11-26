@@ -1449,3 +1449,15 @@
 .notification__title { font-size: 16px; color: var(--ink); -unity-font-style: bold; margin: 0; padding: 0; white-space: normal; }
 .notification__body { font-size: 15px; color: var(--ink); margin: 6px 0 0 0; padding: 0; white-space: normal; }
 .notification__when { margin: 6px 0 0 0; padding: 0; }
+
+/* Parola: „Arată” / „Ascunde” */
+.password-row { align-items: center; }
+.password-show,
+.password-show:hover,
+.password-show:active { min-width: 86px; height: 44px; border-radius: 14px; flex-shrink: 0; background-color: var(--surface); }
+
+/* Capsulele pe hartă: sfera de sticlă; a anului, mai mare */
+.map-marker--capsule { width: 34px; height: 34px; }
+.map-marker--capsule > .map-marker__shape { width: 34px; height: 34px; }
+.map-marker--year { width: 46px; height: 46px; }
+.map-marker--year > .map-marker__shape { width: 46px; height: 46px; }

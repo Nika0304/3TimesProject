@@ -66,6 +66,11 @@ public class CapsuleService {
         this.testUnlock = testUnlock;
     }
 
+    /** Capsulele mele (create de mine sau cu urmele mele), pentru „Harta mea”. */
+    public List<CapsuleView> mine(Viewer me) {
+        return repository.mine(me);
+    }
+
     public List<CapsuleView> nearby(double lat, double lng, double radius, int limit, Viewer me) {
         checkCoordinates(lat, lng);
         double r = Math.max(1, Math.min(radius, maxRadius));

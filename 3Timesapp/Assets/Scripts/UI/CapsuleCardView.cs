@@ -1,5 +1,6 @@
 using System;
 using UnityEngine.UIElements;
+using ThreeTimes.Core;
 using ThreeTimes.Data;
 
 namespace ThreeTimes.UI
@@ -49,6 +50,7 @@ namespace ThreeTimes.UI
         public void Open(SavedTrace c, Action addItem, Action sealNow, Action deleteCapsule, Action removeMyItems = null)
         {
             onAdd = addItem;
+            add.text = "Pune o urmă în capsulă";
             onSeal = sealNow;
             onDelete = deleteCapsule;
             onRemoveMine = removeMyItems;
@@ -96,7 +98,11 @@ namespace ThreeTimes.UI
         }
 
         /// <summary>Capsula anului: înainte de 1 ianuarie (câte urme a strâns) sau după deschidere (emoțiile anului).</summary>
-        public void OpenYear(SavedTrace y)
+        /// <summary>
+        /// Capsula anului. leaveTrace: „Lasă o urmă pentru 2026” (doar cât anul e în curs): o urmă obișnuită, cu bifa
+        /// capsulei anului, lăsată unde ești (urmele nu se pun direct în sferă).
+        /// </summary>
+        public void OpenYear(SavedTrace y, Action leaveTrace = null)
         {
             onAdd = onSeal = onDelete = onRemoveMine = null;
             IsOpen = true;
@@ -128,7 +134,10 @@ namespace ThreeTimes.UI
                 text.text = $"Urmele lăsate în {city} în {y.year}, cu bifa „capsula anului”, se strâng aici. " +
                             $"Se deschide {CapsuleText.When(y)}, pentru toți, și poate fi deschisă două săptămâni.";
             }
-            UIRouter.SetVisible(add, false);
+            bool collecting = !opened && y.year == RomaniaTime.Today.Year;
+            onAdd = collecting ? leaveTrace : null;
+            add.text = $"Lasă o urmă pentru {y.year}";
+            UIRouter.SetVisible(add, onAdd != null);
             UIRouter.SetVisible(seal, false);
             UIRouter.SetVisible(delete, false);
             UIRouter.SetVisible(removeMine, false);

@@ -320,7 +320,10 @@
                         <ui:Label text="Email" class="field-label" />
                         <ui:TextField name="account-email" placeholder-text="nume@exemplu.ro" class="server-input" />
                         <ui:Label text="Parolă" class="field-label" />
-                        <ui:TextField name="account-password" class="server-input" />
+                        <ui:VisualElement class="row password-row">
+                            <ui:TextField name="account-password" class="server-input grow" />
+                            <ui:Button name="account-password-show" text="Arată" class="pill-btn gap-left password-show" />
+                        </ui:VisualElement>
                         <ui:Button name="account-forgot" text="Mi-am uitat parola" class="account-forgot" />
 
                         <!-- Doar la cont nou: cât de puternică e parola -->
@@ -347,7 +350,10 @@
                         <ui:TextField name="account-code-field" placeholder-text="123456" class="server-input account-code-input" />
                         <ui:VisualElement name="account-new-password-box" class="hidden">
                             <ui:Label text="Parola nouă" class="field-label" />
-                            <ui:TextField name="account-new-password" class="server-input" />
+                            <ui:VisualElement class="row password-row">
+                                <ui:TextField name="account-new-password" class="server-input grow" />
+                                <ui:Button name="account-new-password-show" text="Arată" class="pill-btn gap-left password-show" />
+                            </ui:VisualElement>
                             <ui:Label name="account-new-strength" text="" class="caption strength__label hidden" />
                         </ui:VisualElement>
                         <ui:Label name="account-code-error" text="" class="caption account-error hidden" />

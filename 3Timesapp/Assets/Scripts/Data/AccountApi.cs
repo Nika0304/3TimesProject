@@ -106,13 +106,14 @@ namespace ThreeTimes.Data
                          JsonUtility.ToJson(new CodeBody { email = email ?? "", code = code ?? "", password = password ?? "" }), done);
 
         /// <summary>Alt cod de verificare pe email: done(gata, eroare).</summary>
-        public static IEnumerator ResendCode(string email, Action<bool, string> done) => PostEmail("/verify/resend", email, done);
+        public static IEnumerator ResendCode(string email, Action<bool, string> done) =>
+            PostEmail("/verify/resend", email, (ok, error, _) => done?.Invoke(ok, error));
 
-        /// <summary>„Mi-am uitat parola”: cod pe email, dacă emailul are cont: done(gata, eroare).</summary>
-        public static IEnumerator ForgotPassword(string email, Action<bool, string> done) =>
+        /// <summary>„Mi-am uitat parola”: cod pe email: done(gata, eroare, emailul n-are cont).</summary>
+        public static IEnumerator ForgotPassword(string email, Action<bool, string, bool> done) =>
             PostEmail("/password/forgot", email, done);
 
-        static IEnumerator PostEmail(string path, string email, Action<bool, string> done)
+        static IEnumerator PostEmail(string path, string email, Action<bool, string, bool> done)
         {
             byte[] body = System.Text.Encoding.UTF8.GetBytes(JsonUtility.ToJson(new EmailBody { email = email ?? "" }));
             using var request = new UnityWebRequest(Base + path, "POST", new DownloadHandlerBuffer(), new UploadHandlerRaw(body));
@@ -120,7 +121,7 @@ namespace ThreeTimes.Data
             TraceApi.Prepare(request, 20, withAccount: false);
             yield return request.SendWebRequest();
             bool ok = request.result == UnityWebRequest.Result.Success;
-            done?.Invoke(ok, ok ? null : TraceApi.ErrorOf(request));
+            done?.Invoke(ok, ok ? null : TraceApi.ErrorOf(request), request.responseCode == 404);
         }
 
         static IEnumerator Authenticate(string path, string json, Action<AccountInfo, string, bool> done)

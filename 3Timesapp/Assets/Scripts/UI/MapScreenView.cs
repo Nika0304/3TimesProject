@@ -5,6 +5,7 @@ using UnityEngine;
 using UnityEngine.Networking;
 using UnityEngine.UIElements;
 using ThreeTimes.AR;
+using ThreeTimes.Core;
 using ThreeTimes.Data;
 
 namespace ThreeTimes.UI
@@ -694,16 +695,25 @@ namespace ThreeTimes.UI
             markers.Clear();
             foreach (var t in list)
             {
-                var style = TraceStyle.Of(t);
-
                 var marker = new VisualElement { pickingMode = PickingMode.Ignore };
                 marker.AddToClassList("map-marker");
-                if (t.mine) marker.AddToClassList("map-marker--mine");
-                var backdrop = TraceTypeBackdrop.Create(t.type, style.Color, MarkerSize);
-                if (backdrop != null) marker.Add(backdrop);
                 var shape = new VisualElement { pickingMode = PickingMode.Ignore };
                 shape.AddToClassList("map-marker__shape");
-                shape.style.backgroundImage = new StyleBackground(TraceIcon.Get(style));
+                if (t.IsCapsule)
+                {
+                    // Capsula: sfera de sticlă (aurie când se poate deschide); a anului, mai mare.
+                    marker.AddToClassList("map-marker--capsule");
+                    if (t.IsYearCapsule) marker.AddToClassList("map-marker--year");
+                    shape.style.backgroundImage = new StyleBackground(CapsuleIcon.Get(CapsuleText.IsReady(t)));
+                }
+                else
+                {
+                    var style = TraceStyle.Of(t);
+                    if (t.mine) marker.AddToClassList("map-marker--mine");
+                    var backdrop = TraceTypeBackdrop.Create(t.type, style.Color, MarkerSize);
+                    if (backdrop != null) marker.Add(backdrop);
+                    shape.style.backgroundImage = new StyleBackground(TraceIcon.Get(style));
+                }
                 marker.Add(shape);
                 var count = new Label { pickingMode = PickingMode.Ignore };
                 count.AddToClassList("map-marker__count");
@@ -736,6 +746,11 @@ namespace ThreeTimes.UI
         void ShowCard(SavedTrace t)
         {
             selected = t;
+            if (t.IsCapsule)
+            {
+                ShowCapsuleCard(t);
+                return;
+            }
             var style = TraceStyle.Of(t);
 
             cardShapeHolder.Clear();
@@ -767,6 +782,51 @@ namespace ThreeTimes.UI
             UIRouter.SetVisible(card, true);
         }
 
+        static string OpenedOn(SavedTrace c) =>
+            RomaniaTime.TryParseUtc(c.openedAt, out var at) ? $" pe {RomaniaTime.DateText(RomaniaTime.FromUtc(at))}" : "";
+
+        /// <summary>Cardul unei capsule pe hartă: ce fel e, câte urme are, când se deschide, cât de departe e.</summary>
+        void ShowCapsuleCard(SavedTrace c)
+        {
+            cardShapeHolder.Clear();
+            var shape = new VisualElement { pickingMode = PickingMode.Ignore };
+            shape.AddToClassList("map-card__shape");
+            shape.style.backgroundImage = new StyleBackground(CapsuleIcon.Get(CapsuleText.IsReady(c)));
+            cardShapeHolder.Add(shape);
+
+            bool personal = c.visibility == "PERSONAL";
+            cardTitle.text = c.IsYearCapsule ? $"Capsula anului {c.year}"
+                           : personal ? "Capsula ta personală" : c.mine ? "Capsula ta de grup" : "Capsulă de grup";
+            cardTitle.style.color = new Color(0.118f, 0.478f, 0.392f); // verdele Viitorului (--future)
+            string items = c.itemCount == 1 ? "o urmă" : $"{c.itemCount} urme";
+            int left = TraceTime.CapsuleDaysLeft(c);
+            bool expired = TraceTime.CapsuleExpired(c);
+            cardKind.text = c.opened ? $"{items} · ai deschis-o{OpenedOn(c)}"
+                          : expired ? $"{items} · n-a mai fost deschisă la timp"
+                          : CapsuleText.IsReady(c)
+                ? $"{items} · se poate deschide{(left > 0 ? $" încă {left} {(left == 1 ? "zi" : RomaniaTime.Days(left))}" : "")}"
+                : $"{items} · se deschide {CapsuleText.When(c)}";
+
+            if (hasMe)
+            {
+                float d = TraceDistance(meLat, meLng, c.latitude, c.longitude);
+                cardDistance.text = d < 15f ? "Ești chiar lângă ea." : $"La {Round(d)} m, spre {Bearing(meLat, meLng, c.latitude, c.longitude)}.";
+            }
+            else
+            {
+                cardDistance.text = "";
+            }
+            cardHint.text = c.opened ? "Urmele din ea apar în Prezent o săptămână de la deschidere și încă o săptămână la un an."
+                : expired ? "Au trecut cele două săptămâni de după dată: capsula nu se mai poate deschide."
+                : CapsuleText.IsReady(c)
+                ? "Mergi până lângă ea, pornește camera și treci în Viitor ca s-o deschizi."
+                : c.collecting && (!personal || c.mine)
+                    ? "Încă primește urme: mergi lângă ea, în Viitor, ca să-ți pui și tu una."
+                    : "Până la data deschiderii, nimeni nu vede ce e înăuntru.";
+            UIRouter.SetVisible(cardOpen, false);
+            UIRouter.SetVisible(card, true);
+        }
+
         /// <summary>La mărirea maximă, urmele grupului s-ar despărți pe ecran? (altfel n-are rost să mărim)</summary>
         bool SplitsAtMaxZoom(List<SavedTrace> group)
         {
@@ -789,7 +849,6 @@ namespace ThreeTimes.UI
             for (int i = 0; i < group.Count; i++)
             {
                 var t = group[i];
-                var style = TraceStyle.Of(t);
                 int index = i;
 
                 var item = new VisualElement();
@@ -797,17 +856,29 @@ namespace ThreeTimes.UI
                 item.AddToClassList("map-group__item--enter");
                 var holder = new VisualElement { pickingMode = PickingMode.Ignore };
                 holder.AddToClassList("map-group__holder");
-                if (t.mine) holder.AddToClassList("map-group__holder--mine");
-                var backdrop = TraceTypeBackdrop.Create(t.type, style.Color, 64f);
-                if (backdrop != null) holder.Add(backdrop);
                 var shape = new VisualElement { pickingMode = PickingMode.Ignore };
                 shape.AddToClassList("map-group__shape");
-                shape.style.backgroundImage = new StyleBackground(TraceIcon.Get(style));
-                holder.Add(shape);
+                Label label;
+                if (t.IsCapsule)
+                {
+                    shape.style.backgroundImage = new StyleBackground(CapsuleIcon.Get(CapsuleText.IsReady(t)));
+                    holder.Add(shape);
+                    label = new Label(t.IsYearCapsule ? "capsula anului" : "capsulă") { pickingMode = PickingMode.Ignore };
+                    label.style.color = new Color(0.118f, 0.478f, 0.392f);
+                }
+                else
+                {
+                    var style = TraceStyle.Of(t);
+                    if (t.mine) holder.AddToClassList("map-group__holder--mine");
+                    var backdrop = TraceTypeBackdrop.Create(t.type, style.Color, 64f);
+                    if (backdrop != null) holder.Add(backdrop);
+                    shape.style.backgroundImage = new StyleBackground(TraceIcon.Get(style));
+                    holder.Add(shape);
+                    label = new Label(style.Label) { pickingMode = PickingMode.Ignore };
+                    label.style.color = style.Ink;
+                }
                 item.Add(holder);
-                var label = new Label(style.Label) { pickingMode = PickingMode.Ignore };
                 label.AddToClassList("map-group__label");
-                label.style.color = style.Ink;
                 item.Add(label);
                 item.RegisterCallback<ClickEvent>(_ =>
                 {

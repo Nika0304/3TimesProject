@@ -43,6 +43,9 @@ namespace ThreeTimes.UI
         /// <summary>Contul a fost șters (cu urmele lui): urmele proprii trebuie scoase și de pe telefon.</summary>
         public event Action AccountDeleted;
 
+        /// <summary>Contul s-a deschis (autentificare, cont activat, parolă nouă): aplicația se întoarce în Prezent.</summary>
+        public event Action SignedIn;
+
         public AccountView(VisualElement root, UIRouter router, MonoBehaviour host)
         {
             this.router = router;
@@ -122,6 +125,13 @@ namespace ThreeTimes.UI
             deleteCancel.clicked += HideConfirm;
             deleteConfirm.clicked += DeleteAccount;
             forgot.clicked += ForgotPassword;
+            PasswordToggle(passwordField, root.Q<Button>("account-password-show"));
+            PasswordToggle(newPasswordField, root.Q<Button>("account-new-password-show"));
+            // Enter trimite formularul (intră în cont / creează contul / confirmă codul).
+            foreach (var field in new[] { firstNameField, lastNameField, emailField, passwordField })
+                OnEnter(field, Submit);
+            foreach (var field in new[] { codeField, newPasswordField })
+                OnEnter(field, SubmitCode);
             codeSubmit.clicked += SubmitCode;
             codeResend.clicked += ResendCode;
             codeCancel.clicked += LeaveCode;
@@ -129,6 +139,44 @@ namespace ThreeTimes.UI
             AccountSession.Changed += UpdateMenuLabel;
             UpdateMenuLabel();
             SetRegisterMode(false);
+        }
+
+        /// <summary>„Arată” / „Ascunde” lângă un câmp de parolă.</summary>
+        static void PasswordToggle(TextField field, Button button)
+        {
+            if (field == null || button == null) return;
+            button.clicked += () =>
+            {
+                field.isPasswordField = !field.isPasswordField;
+                button.text = field.isPasswordField ? "Arată" : "Ascunde";
+            };
+        }
+
+        /// <summary>Enter (sau „Gata” pe tastatura telefonului) într-un câmp pornește acțiunea.</summary>
+        static void OnEnter(TextField field, Action action)
+        {
+            field.RegisterCallback<KeyDownEvent>(e =>
+            {
+                if (e.keyCode != KeyCode.Return && e.keyCode != KeyCode.KeypadEnter && e.character != '\n') return;
+                e.StopPropagation();
+                action();
+            }, TrickleDown.TrickleDown);
+            field.RegisterCallback<NavigationSubmitEvent>(e =>
+            {
+                e.StopPropagation();
+                action();
+            }, TrickleDown.TrickleDown);
+        }
+
+        /// <summary>Parolele se ascund din nou (la închidere).</summary>
+        void HidePasswords()
+        {
+            passwordField.isPasswordField = true;
+            newPasswordField.isPasswordField = true;
+            var a = screen.Q<Button>("account-password-show");
+            var b = screen.Q<Button>("account-new-password-show");
+            if (a != null) a.text = "Arată";
+            if (b != null) b.text = "Arată";
         }
 
         // ---------------------------------------------------------------- deschidere / închidere
@@ -146,6 +194,7 @@ namespace ThreeTimes.UI
             BlurAll();
             passwordField.value = "";
             newPasswordField.value = "";
+            HidePasswords();
             UIRouter.SetVisible(screen, false);
         }
 
@@ -291,6 +340,8 @@ namespace ThreeTimes.UI
                 ShowState();
                 ShowAccount(info);
                 TestLog.Add(register ? "Cont creat" : "Autentificare reușită");
+                Close();
+                SignedIn?.Invoke();
                 router.Toast(register ? "Contul e gata. Urmele de pe telefonul acesta au trecut în cont."
                                       : (info.firstName?.Length > 0 ? $"Bine ai revenit, {info.firstName}!" : "Ai intrat în cont."), 4f);
             };
@@ -318,10 +369,19 @@ namespace ThreeTimes.UI
             BlurAll();
             SetBusy(true, null);
             forgot.text = "Se trimite…";
-            host.StartCoroutine(AccountApi.ForgotPassword(email, (ok, message) =>
+            host.StartCoroutine(AccountApi.ForgotPassword(email, (ok, message, noAccount) =>
             {
                 SetBusy(false, null);
                 forgot.text = "Mi-am uitat parola";
+                if (noAccount)
+                {
+                    // Emailul n-are cont: îl trimitem la „Cont nou”, cu emailul deja scris.
+                    passwordField.value = "";
+                    SetRegisterMode(true);
+                    ShowError(message);
+                    firstNameField.Focus();
+                    return;
+                }
                 if (!ok)
                 {
                     ShowError(message);
@@ -408,6 +468,8 @@ namespace ThreeTimes.UI
                 ShowState();
                 ShowAccount(info);
                 TestLog.Add(reset ? "Parolă schimbată" : "Email verificat, cont activ");
+                Close();
+                SignedIn?.Invoke();
                 router.Toast(reset ? "Parola e schimbată. Ai intrat în cont."
                                    : "Emailul e verificat. Contul e gata, iar urmele de pe telefonul acesta au trecut în cont.", 4f);
             };
@@ -422,7 +484,7 @@ namespace ThreeTimes.UI
             bool reset = codeMode == CodeMode.Reset;
             SetBusy(true, null);
             codeResend.text = "Se trimite…";
-            Action<bool, string> done = (ok, message) =>
+            Action<bool, string, bool> done = (ok, message, _) =>
             {
                 SetBusy(false, null);
                 codeResend.text = "Trimite alt cod";
@@ -437,7 +499,7 @@ namespace ThreeTimes.UI
             };
             host.StartCoroutine(reset
                 ? AccountApi.ForgotPassword(codeEmail, done)
-                : AccountApi.ResendCode(codeEmail, done));
+                : AccountApi.ResendCode(codeEmail, (ok, message) => done(ok, message, false)));
         }
 
         void ShowCodeError(string message)
