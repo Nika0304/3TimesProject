@@ -33,7 +33,7 @@ import com.threetimes.backend.trace.TraceService;
  * POST   /api/v1/account/verify    {"email", "code"}       → {"token", "account"} (contul e activ)
  * POST   /api/v1/account/verify/resend {"email"}           → 204, alt cod (după cel puțin un minut)
  * POST   /api/v1/account/login     {"email", "password"}   → {"token", "account"}, sau {"verificationRequired": true}
- * POST   /api/v1/account/password/forgot {"email"}         → 204, cod pe email dacă emailul are cont
+ * POST   /api/v1/account/password/forgot {"email"}         → 204, cod pe email (404 dacă emailul n-are cont)
  * POST   /api/v1/account/password/reset  {"email", "code", "password"} → {"token", "account"}
  * GET    /api/v1/account                                    → contul (email, câte urme are…)
  * GET    /api/v1/account/traces                             → urmele contului, pentru „Harta mea”

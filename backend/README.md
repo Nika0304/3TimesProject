@@ -185,7 +185,7 @@ lui, n-o șterge (`Viewer.owns` / `Viewer.owned`). Tot așa, o capsulă deschis�
 | POST | `/api/v1/account/verify` (`{"email", "code"}`) | codul de 6 cifre activează contul: `{"token", "account"}` |
 | POST | `/api/v1/account/verify/resend` (`{"email"}`) | alt cod de verificare (429 dacă s-a cerut unul acum mai puțin de un minut) |
 | POST | `/api/v1/account/login` (`{"email", "password"}`) | `{"token", "account"}`; dacă emailul nu e verificat, trimite codul și răspunde `{"verificationRequired": true}`; 401 la parolă greșită, 429 după 10 greșeli în 15 min |
-| POST | `/api/v1/account/password/forgot` (`{"email"}`) | „Mi-am uitat parola”: cod pe email; 204 și dacă emailul n-are cont (nu se poate afla cine are cont) |
+| POST | `/api/v1/account/password/forgot` (`{"email"}`) | „Mi-am uitat parola”: cod pe email; 404 dacă emailul n-are cont (aplicația trimite la „Cont nou”) |
 | POST | `/api/v1/account/password/reset` (`{"email", "code", "password"}`) | parola nouă; închide sesiunile vechi și deschide contul: `{"token", "account"}` |
 | GET | `/api/v1/account` | contul: `firstName, lastName, email, createdAt, traceCount, hasPassword, hasGoogle` |
 | GET | `/api/v1/account/traces` | urmele contului (max 500, cele mai noi primele): `{"traces": [...]}` |

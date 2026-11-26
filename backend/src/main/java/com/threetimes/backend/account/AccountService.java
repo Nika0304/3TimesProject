@@ -109,13 +109,15 @@ public class AccountService {
     }
 
     /**
-     * „Mi-am uitat parola”: trimite un cod pe email, dacă emailul are cont. Răspunde la fel și dacă nu are,
-     * ca să nu se poată afla ce emailuri au cont.
+     * „Mi-am uitat parola”: trimite un cod pe email. Dacă emailul n-are cont, răspunde 404, ca aplicația să-l
+     * trimită la „Cont nou” (decis 27 nov; oricum „Cont nou” spune dacă emailul are deja cont).
      */
     public void forgotPassword(EmailRequest r) {
         String email = email(new Credentials(r == null ? null : r.email(), null));
         User user = repository.byEmail(email).orElse(null);
-        if (user != null) codes.send(user, EmailCodeService.Purpose.RESET, true);
+        if (user == null)
+            throw new ApiException(HttpStatus.NOT_FOUND, "Nu există încă un cont cu acest email. Fă-ți unul aici.");
+        codes.send(user, EmailCodeService.Purpose.RESET, true);
     }
 
     /**
